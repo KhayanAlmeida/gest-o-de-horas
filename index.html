@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistema de Gestão de Horas Extras</title>
+    <meta name="description" content="Sistema completo para gestão e controle de horas extras dos funcionários">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/pt-br.min.js"></script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-text-size-adjust: 100%;
+            overscroll-behavior-y: contain;
+        }
+        input, select, button, textarea {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            font-size: 16px !important;
+            min-height: 44px;
+        }
+        input[type="date"]:not([value]):before {
+            content: attr(placeholder) !important;
+            color: #6b7280;
+            margin-right: 0.5em;
+        }
+        input[type="date"]:focus:before,
+        input[type="date"]:valid:before {
+            display: none;
+        }
+        button, [role="button"] {
+            touch-action: manipulation;
+            user-select: none;
+        }
+        .status-pendente {
+            color: #d97706;
+            font-weight: 500;
+        }
+        .status-confirmado {
+            color: #059669;
+            font-weight: 500;
+        }
+        .senha-input {
+            letter-spacing: 0.2em;
+            font-size: 18px !important;
+        }
+        .modal-content {
+            max-height: 90vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        input:disabled {
+            opacity: 1;
+            -webkit-text-fill-color: inherit;
+            background-color: #f3f4f6 !important;
+            cursor: default;
+        }
+        .error-message {
+            color: #ef4444;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+            display: none;
+        }
+        .input-error {
+            border: 1px solid #ef4444 !important;
+        }
+        .registro-desconto {
+            border-left: 4px solid #ef4444;
+        }
+        .registro-desconto .horas {
+            color: #ef4444 !important;
+        }
+        #senhaResponsavelContainer {
+            transition: all 0.3s ease;
+        }
+        .whitespace-pre-wrap {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .logo-header {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            margin-left: 10px;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @media (max-width: 640px) {
+            .grid-cols-2 {
+                grid-template-columns: 1fr 1fr !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex flex-col min-h-screen">
+        <!-- Barra de Navegação -->
+        <div class="sticky top-0 z-10 bg-white p-3 border-b shadow-sm">
+            <div class="flex items-center justify-between">
+                <button onclick="history.back()" class="text-gray-800 flex w-10 h-10 items-center justify-center" aria-label="Voltar">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 256 256">
+                        <path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"></path>
+                    </svg>
+                </button>
+                <h1 class="text-gray-900 text-lg font-bold text-center px-2 flex-1" id="tituloPagina">Registrar Horas</h1>
+            </div>
+        </div>
+
+        <!-- Abas de Navegação -->
+        <div class="flex border-b sticky top-14 z-10 bg-white shadow-sm">
+            <button id="abaHoras" class="flex-1 py-3 font-medium text-blue-600 border-b-2 border-blue-600 text-sm">Registrar</button>
+            <button id="abaCadastro" class="flex-1 py-3 font-medium text-gray-500 text-sm">Cadastro</button>
+            <button id="abaHistorico" class="flex-1 py-3 font-medium text-gray-500 text-sm">Histórico</button>
+        </div>
+
+        <!-- Conteúdo da Aba de Registrar Horas -->
+        <div id="conteudoHoras" class="flex-grow overflow-y-auto pb-20">
+            <div class="p-4 space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ID do Funcionário</label>
+                    <input
+                        id="idFuncionarioInput"
+                        class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Digite o ID (2 dígitos)"
+                        maxlength="2"
+                        pattern="\d{2}"
+                        inputmode="numeric"
+                        required
+                    >
+                    <span class="error-message" id="idFuncionarioError"></span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Funcionário</label>
+                    <input
+                        id="nomeFuncionarioInput"
+                        class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Preenchido automaticamente"
+                        readonly
+                        disabled
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                    <input
+                        id="dataInput"
+                        type="date"
+                        class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Selecione a data"
+                        required
+                    >
+                    <span class="error-message" id="dataError"></span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Horas Extras</label>
+                    <input
+                        id="horasExtrasInput"
+                        class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ex: 2.5 (use ponto para decimais)"
+                        inputmode="decimal"
+                        required
+                    >
+                    <span class="error-message" id="horasError"></span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                    <textarea
+                        id="observacoesInput"
+                        class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+                        placeholder="Descreva a razão das horas extras (obrigatório)"
+                        required
+                    ></textarea>
+                    <span class="error-message" id="observacoesError"></span>
+                </div>
+                <button
+                    id="registrarHorasBtn"
+                    class="w-full py-3 bg-blue-600 text-white rounded-lg font-medium mt-2 active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                    <span id="registrarHorasText">Registrar Horas</span>
+                    <div id="registrarHorasLoading" class="loading-spinner hidden"></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Conteúdo da Aba de Cadastro -->
+        <div id="conteudoCadastro" class="flex-grow overflow-y-auto pb-20 hidden">
+            <!-- Formulário de Cadastro -->
+            <div id="formContainer" class="p-4 hidden">
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                        <input
+                            id="nomeInput"
+                            class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Digite o nome"
+                            required
+                            minlength="3"
+                        >
+                        <span class="error-message" id="nomeError"></span>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+                        <select
+                            id="cargoInput"
+                            class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        >
+                            <option value="">Selecione o cargo</option>
+                            <option value="Funcionário">Funcionário</option>
+                            <option value="Responsável">Responsável</option>
+                        </select>
+                        <span class="error-message" id="cargoError"></span>
+                    </div>
+                    <div id="senhaResponsavelContainer" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Senha do Responsável</label>
+                        <input
+                            type="password"
+                            id="senhaResponsavelInput"
+                            class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500 senha-input"
+                            placeholder="Digite a senha para confirmar horas"
+                            minlength="4"
+                        >
+                        <span class="error-message" id="senhaResponsavelError"></span>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ID (2 dígitos)</label>
+                        <input
+                            id="idInput"
+                            class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Ex: 01"
+                            maxlength="2"
+                            pattern="\d{2}"
+                            inputmode="numeric"
+                            required
+                        >
+                        <span class="error-message" id="idError"></span>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-4">
+                    <button
+                        id="cancelarBtn"
+                        class="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium active:bg-gray-300 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="salvarBtn"
+                        class="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg font-medium active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span id="salvarBtnText">Salvar</span>
+                        <div id="salvarBtnLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista de Funcionários -->
+            <div class="p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-bold text-gray-900">Funcionários</h2>
+                    <span class="text-xs text-gray-500" id="totalFuncionarios">0 cadastrados</span>
+                </div>
+                
+                <div id="listaFuncionarios" class="space-y-2">
+                    <!-- Funcionários serão adicionados dinamicamente aqui -->
+                </div>
+            </div>
+
+            <!-- Botões de Exportação -->
+            <div class="p-4 border-t mt-2">
+                <div class="grid grid-cols-2 gap-3">
+                    <button
+                        id="exportPdfBtn"
+                        class="py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium text-sm active:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>Exportar PDF</span>
+                        <div id="exportPdfLoading" class="loading-spinner hidden"></div>
+                    </button>
+                    <button
+                        id="exportExcelBtn"
+                        class="py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium text-sm active:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>Exportar Excel</span>
+                        <div id="exportExcelLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conteúdo da Aba de Histórico -->
+        <div id="conteudoHistorico" class="flex-grow overflow-y-auto pb-20 hidden">
+            <div class="p-4">
+                <h2 class="text-lg font-bold text-gray-900 mb-3">Histórico de Horas</h2>
+                
+                <!-- Filtros -->
+                <div class="bg-gray-100 p-3 rounded-lg space-y-3 mb-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Período</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input 
+                                id="dataInicialFilter" 
+                                type="date" 
+                                class="w-full p-2 rounded-lg bg-white border-none"
+                                placeholder="Data inicial"
+                            >
+                            <input 
+                                id="dataFinalFilter" 
+                                type="date" 
+                                class="w-full p-2 rounded-lg bg-white border-none"
+                                placeholder="Data final"
+                            >
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Funcionário</label>
+                        <select 
+                            id="funcionarioFilter" 
+                            class="w-full p-2 rounded-lg bg-white border-none"
+                        >
+                            <option value="">Todos</option>
+                            <!-- Opções serão preenchidas dinamicamente -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select 
+                            id="statusFilter" 
+                            class="w-full p-2 rounded-lg bg-white border-none"
+                        >
+                            <option value="">Todos</option>
+                            <option value="Pendente">Pendentes</option>
+                            <option value="Confirmado">Confirmados</option>
+                        </select>
+                    </div>
+                    <button
+                        id="aplicarFiltroBtn"
+                        class="w-full py-2 bg-blue-600 text-white rounded-lg font-medium active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>Aplicar Filtros</span>
+                        <div id="aplicarFiltroLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+                
+                <!-- Botões de Exportação -->
+                <div class="bg-gray-100 p-3 rounded-lg mb-3 grid grid-cols-2 gap-3">
+                    <button
+                        id="exportPdfHistoricoBtn"
+                        class="py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium text-sm active:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>Exportar PDF</span>
+                        <div id="exportPdfHistoricoLoading" class="loading-spinner hidden"></div>
+                    </button>
+                    <button
+                        id="exportExcelHistoricoBtn"
+                        class="py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium text-sm active:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>Exportar Excel</span>
+                        <div id="exportExcelHistoricoLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+                
+                <!-- Botão para descontar horas -->
+                <div class="bg-gray-100 p-3 rounded-lg mb-3">
+                    <button
+                        id="descontarHorasBtn"
+                        class="w-full py-2 bg-red-600 text-white rounded-lg font-medium active:bg-red-700 transition-colors"
+                    >
+                        Descontar Horas
+                    </button>
+                </div>
+                
+                <!-- Resumo -->
+                <div class="bg-gray-100 p-3 rounded-lg mb-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-gray-700">Total de Horas Confirmadas</p>
+                            <p class="text-xl font-bold text-blue-600" id="totalHorasHistorico">0</p>
+                        </div>
+                        <p class="text-xs text-gray-600 text-right" id="periodoSelecionado">Todos os registros</p>
+                    </div>
+                </div>
+                
+                <!-- Lista -->
+                <div id="listaHistorico" class="space-y-2">
+                    <!-- Registros serão adicionados dinamicamente aqui -->
+                </div>
+                <div id="semRegistrosHistorico" class="text-center py-8 text-gray-500 hidden">
+                    Nenhum registro encontrado
+                </div>
+            </div>
+        </div>
+
+        <!-- Botão Flutuante de Adicionar -->
+        <div id="addButtonContainer" class="fixed bottom-0 left-0 right-0 bg-white p-3 border-t shadow-lg hidden">
+            <button
+                id="addFuncionarioBtn"
+                class="w-full max-w-md mx-auto py-2 bg-blue-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 active:bg-blue-700 transition-colors"
+                aria-label="Adicionar novo funcionário"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                    <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V64H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"></path>
+                </svg>
+                <span class="text-sm">Adicionar Funcionário</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para edição de horas extras -->
+    <div id="modalEdicaoHoras" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-4 w-full max-w-sm mx-4 modal-content">
+            <h3 class="text-lg font-bold mb-3">Editar Horas</h3>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Senha</label>
+                    <input
+                        type="password"
+                        id="senhaEdicaoInput"
+                        placeholder="Digite a senha"
+                        class="w-full p-2 border rounded-lg senha-input"
+                        required
+                    >
+                    <span class="error-message" id="senhaEdicaoError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Novo Valor</label>
+                    <input
+                        type="number"
+                        step="0.5"
+                        id="novasHorasInput"
+                        placeholder="Horas extras"
+                        class="w-full p-2 border rounded-lg"
+                        inputmode="decimal"
+                        required
+                    >
+                    <span class="error-message" id="novasHorasError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Observações</label>
+                    <textarea
+                        id="novaObservacaoInput"
+                        class="w-full p-2 border rounded-lg min-h-[80px]"
+                        placeholder="Observações"
+                        required
+                    ></textarea>
+                    <span class="error-message" id="novaObservacaoError"></span>
+                </div>
+                
+                <div class="flex justify-end gap-2">
+                    <button
+                        id="cancelarEdicaoBtn"
+                        class="px-3 py-1.5 bg-gray-200 rounded-lg text-sm active:bg-gray-300 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="confirmarEdicaoBtn"
+                        class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span id="confirmarEdicaoText">Confirmar</span>
+                        <div id="confirmarEdicaoLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação do Superior -->
+    <div id="modalConfirmacao" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-4 w-full max-w-sm mx-4 modal-content">
+            <h3 class="text-lg font-bold mb-3">Confirmação do Superior</h3>
+            <div class="space-y-3">
+                <p class="text-sm text-gray-600">Digite a senha para confirmar as horas extras:</p>
+                <input
+                    type="password"
+                    id="senhaConfirmacaoInput"
+                    placeholder="Digite a senha"
+                    class="w-full p-2 border rounded-lg senha-input"
+                    required
+                >
+                <span class="error-message" id="senhaConfirmacaoError"></span>
+                <div class="flex justify-end gap-2">
+                    <button
+                        id="cancelarConfirmacaoBtn"
+                        class="px-3 py-1.5 bg-gray-200 rounded-lg text-sm active:bg-gray-300 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="confirmarHorasBtn"
+                        class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm active:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span id="confirmarHorasText">Confirmar</span>
+                        <div id="confirmarHorasLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Desconto de Horas -->
+    <div id="modalDescontoHoras" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-4 w-full max-w-sm mx-4 modal-content">
+            <h3 class="text-lg font-bold mb-3">Descontar Horas</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Funcionário</label>
+                    <select
+                        id="funcionarioDescontoSelect"
+                        class="w-full p-2 border rounded-lg"
+                        required
+                    >
+                        <option value="">Selecione o funcionário</option>
+                        <!-- Opções serão preenchidas dinamicamente -->
+                    </select>
+                    <span class="error-message" id="funcionarioDescontoError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Horas para Descontar</label>
+                    <input
+                        type="number"
+                        step="0.5"
+                        min="0.5"
+                        id="horasDescontoInput"
+                        placeholder="Ex: 2.5"
+                        class="w-full p-2 border rounded-lg"
+                        inputmode="decimal"
+                        required
+                    >
+                    <span class="error-message" id="horasDescontoError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Data</label>
+                    <input
+                        type="date"
+                        id="dataDescontoInput"
+                        class="w-full p-2 border rounded-lg"
+                        required
+                    >
+                    <span class="error-message" id="dataDescontoError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Observações</label>
+                    <textarea
+                        id="observacoesDescontoInput"
+                        class="w-full p-2 border rounded-lg min-h-[80px]"
+                        placeholder="Motivo do desconto"
+                        required
+                    ></textarea>
+                    <span class="error-message" id="observacoesDescontoError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Senha</label>
+                    <input
+                        type="password"
+                        id="senhaDescontoInput"
+                        placeholder="Digite a senha"
+                        class="w-full p-2 border rounded-lg senha-input"
+                        required
+                    >
+                    <span class="error-message" id="senhaDescontoError"></span>
+                </div>
+                
+                <div class="flex justify-end gap-2">
+                    <button
+                        id="cancelarDescontoBtn"
+                        class="px-3 py-1.5 bg-gray-200 rounded-lg text-sm active:bg-gray-300 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="confirmarDescontoBtn"
+                        class="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm active:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span id="confirmarDescontoText">Confirmar Desconto</span>
+                        <div id="confirmarDescontoLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Senha para Acesso -->
+    <div id="modalSenhaAcesso" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-4 w-full max-w-sm mx-4 modal-content">
+            <h3 class="text-lg font-bold mb-3">Acesso Restrito</h3>
+            <div class="space-y-3">
+                <p class="text-sm text-gray-600">Digite a senha para acessar esta área:</p>
+                <input
+                    type="password"
+                    id="senhaAcessoInput"
+                    placeholder="Digite a senha"
+                    class="w-full p-2 border rounded-lg senha-input"
+                    required
+                >
+                <span class="error-message" id="senhaAcessoError"></span>
+                <div class="flex justify-end gap-2">
+                    <button
+                        id="cancelarAcessoBtn"
+                        class="px-3 py-1.5 bg-gray-200 rounded-lg text-sm active:bg-gray-300 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="confirmarAcessoBtn"
+                        class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span id="confirmarAcessoText">Acessar</span>
+                        <div id="confirmarAcessoLoading" class="loading-spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            getDocs, 
+            doc, 
+            updateDoc, 
+            deleteDoc,
+            query,
+            where,
+            orderBy,
+            getDoc,
+            setDoc
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDizUpxR37FGDxBwSYwBaYLo8b4OOxF4kU",
+            authDomain: "banco-de-horas-4d170.firebaseapp.com",
+            projectId: "banco-de-horas-4d170",
+            storageBucket: "banco-de-horas-4d170.appspot.com",
+            messagingSenderId: "746132039738",
+            appId: "1:746132039738:web:615c0f16094524a5392d03",
+            measurementId: "G-1YK2TV26CK"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Variáveis globais
+        let funcionarios = [];
+        let registrosHoras = [];
+        let modoEdicao = false;
+        let funcionarioEditando = null;
+        let abaAtiva = 'horas';
+        let registroEditandoIndex = null;
+        const SENHA_EDICAO = '4959';
+        const SENHA_SUPERIOR = '4959';
+        const SENHA_ACESSO = '4959';
+        const SENHA_RESPONSAVEL_PADRAO = '1234';
+        let registroParaConfirmar = null;
+        let abaSolicitada = null;
+
+        // Funções de Firestore
+        async function carregarDados() {
+            try {
+                // Mostrar loading
+                toggleLoading('aplicarFiltroLoading', true);
+                
+                // Carrega funcionários
+                const querySnapshotFunc = await getDocs(collection(db, "funcionarios"));
+                funcionarios = querySnapshotFunc.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Carrega registros de horas
+                const querySnapshotHoras = await getDocs(collection(db, "registrosHoras"));
+                registrosHoras = querySnapshotHoras.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Se não houver dados, cria exemplos iniciais
+                if (funcionarios.length === 0) {
+                    await criarDadosIniciais();
+                }
+                
+                // Atualiza a interface
+                atualizarListaFuncionarios();
+                if (abaAtiva === 'historico') {
+                    atualizarHistorico();
+                }
+            } catch (e) {
+                console.error("Erro ao carregar dados:", e);
+                mostrarErroGeral("Ocorreu um erro ao carregar os dados. Tente recarregar a página.");
+            } finally {
+                toggleLoading('aplicarFiltroLoading', false);
+            }
+        }
+
+        async function criarDadosIniciais() {
+            const dadosIniciais = [
+                { nome: 'Carlos Silva', cargo: 'Desenvolvedor', id: '01' },
+                { nome: 'Ana Souza', cargo: 'Responsável', id: '02', senhaConfirmacao: '1234' },
+                { nome: 'Pedro Oliveira', cargo: 'Designer', id: '03' }
+            ];
+            
+            // Adiciona funcionários com IDs específicos (01, 02, 03)
+            for (const func of dadosIniciais) {
+                await setDoc(doc(db, "funcionarios", func.id), {
+                    nome: func.nome,
+                    cargo: func.cargo,
+                    id: func.id,
+                    ...(func.senhaConfirmacao && { senhaConfirmacao: func.senhaConfirmacao })
+                });
+            }
+            
+            const hoje = moment().format('DD/MM/YYYY');
+            const ontem = moment().subtract(1, 'days').format('DD/MM/YYYY');
+            const anteontem = moment().subtract(2, 'days').format('DD/MM/YYYY');
+            
+            const registrosIniciais = [
+                { 
+                    idFuncionario: '01', 
+                    data: anteontem, 
+                    horas: 2.5, 
+                    nome: 'Carlos Silva', 
+                    observacoes: 'Projeto urgente', 
+                    status: 'Confirmado', 
+                    dataConfirmacao: moment().subtract(2, 'days').format('DD/MM/YYYY HH:mm') 
+                },
+                { 
+                    idFuncionario: '02', 
+                    data: ontem, 
+                    horas: 1, 
+                    nome: 'Ana Souza', 
+                    observacoes: 'Reunião com cliente', 
+                    status: 'Confirmado', 
+                    dataConfirmacao: moment().subtract(1, 'days').format('DD/MM/YYYY HH:mm') 
+                },
+                { 
+                    idFuncionario: '01', 
+                    data: hoje, 
+                    horas: 3, 
+                    nome: 'Carlos Silva', 
+                    observacoes: 'Correção de bugs', 
+                    status: 'Pendente' 
+                }
+            ];
+            
+            for (const reg of registrosIniciais) {
+                await addDoc(collection(db, "registrosHoras"), reg);
+            }
+            
+            // Recarrega os dados
+            await carregarDados();
+        }
+
+        async function salvarFuncionario() {
+            // Limpa erros anteriores
+            limparErros();
+            
+            const nome = document.getElementById('nomeInput').value.trim();
+            const cargo = document.getElementById('cargoInput').value.trim();
+            const id = document.getElementById('idInput').value.trim();
+            const senhaResponsavel = document.getElementById('senhaResponsavelInput').value;
+
+            // Validações
+            if (!/^\d{2}$/.test(id)) {
+                mostrarErro('idInput', 'O ID deve conter exatamente 2 dígitos numéricos (ex: 01, 02)');
+                return;
+            }
+
+            if (!nome || nome.length < 3) {
+                mostrarErro('nomeInput', 'Por favor, insira um nome válido com pelo menos 3 caracteres');
+                return;
+            }
+
+            if (!cargo || cargo.length < 2) {
+                mostrarErro('cargoInput', 'Por favor, insira um cargo válido');
+                return;
+            }
+
+            // Validação adicional para cargo de responsável
+            if (cargo === 'Responsável') {
+                if (!senhaResponsavel || senhaResponsavel.length < 4) {
+                    mostrarErro('senhaResponsavelInput', 'A senha deve ter pelo menos 4 caracteres');
+                    return;
+                }
+            }
+
+            try {
+                toggleLoading('salvarBtnLoading', true);
+                
+                const funcRef = doc(db, "funcionarios", id);
+                
+                const dadosFuncionario = {
+                    nome,
+                    cargo,
+                    id
+                };
+
+                // Adiciona senha apenas para responsáveis
+                if (cargo === 'Responsável') {
+                    dadosFuncionario.senhaConfirmacao = senhaResponsavel || SENHA_RESPONSAVEL_PADRAO;
+                }
+
+                if (modoEdicao && funcionarioEditando) {
+                    // ATUALIZAÇÃO - Verifica se o ID foi alterado
+                    if (id !== funcionarioEditando.id) {
+                        mostrarErro('idInput', 'Não é possível alterar o ID de um funcionário existente');
+                        return;
+                    }
+                    
+                    // Atualiza funcionário existente
+                    await updateDoc(funcRef, dadosFuncionario);
+                    
+                    // Atualiza registros de horas com o novo nome
+                    await atualizarNomeNosRegistros(id, nome);
+                } else {
+                    // CRIAÇÃO - Verifica se ID já existe
+                    const docSnap = await getDoc(funcRef);
+                    
+                    if (docSnap.exists()) {
+                        mostrarErro('idInput', 'Já existe um funcionário com este ID');
+                        return;
+                    }
+                    
+                    // Adiciona novo funcionário
+                    await setDoc(funcRef, dadosFuncionario);
+                }
+                
+                // Atualiza a interface
+                await carregarDados();
+                esconderFormulario();
+                mostrarSucesso(`Funcionário ${modoEdicao ? 'atualizado' : 'cadastrado'} com sucesso!`);
+            } catch (e) {
+                console.error("Erro ao salvar funcionário:", e);
+                mostrarErroGeral(`Ocorreu um erro ao ${modoEdicao ? 'atualizar' : 'cadastrar'}. Tente novamente.`);
+            } finally {
+                toggleLoading('salvarBtnLoading', false);
+            }
+        }
+
+        async function atualizarNomeNosRegistros(idFuncionario, novoNome) {
+            try {
+                const registrosRef = collection(db, "registrosHoras");
+                const q = query(registrosRef, where("idFuncionario", "==", idFuncionario));
+                const querySnapshot = await getDocs(q);
+                
+                const atualizacoes = [];
+                querySnapshot.forEach(async (doc) => {
+                    await updateDoc(doc.ref, { nome: novoNome });
+                });
+                
+                await Promise.all(atualizacoes);
+            } catch (e) {
+                console.error("Erro ao atualizar registros:", e);
+                // Não interrompe o fluxo principal, apenas loga o erro
+            }
+        }
+
+        async function removerFuncionario(id) {
+            if (confirm('Tem certeza que deseja remover este funcionário? Todos os registros de horas extras também serão removidos.')) {
+                try {
+                    toggleLoading('salvarBtnLoading', true);
+                    
+                    // Remove funcionário
+                    await deleteDoc(doc(db, "funcionarios", id));
+                    
+                    // Remove registros associados
+                    const registrosRef = collection(db, "registrosHoras");
+                    const q = query(registrosRef, where("idFuncionario", "==", id));
+                    const querySnapshot = await getDocs(q);
+                    
+                    querySnapshot.forEach(async (doc) => {
+                        await deleteDoc(doc.ref);
+                    });
+                    
+                    // Atualiza a interface
+                    await carregarDados();
+                    mostrarSucesso('Funcionário removido com sucesso!');
+                } catch (e) {
+                    console.error("Erro ao remover funcionário:", e);
+                    mostrarErroGeral("Ocorreu um erro ao remover. Tente novamente.");
+                } finally {
+                    toggleLoading('salvarBtnLoading', false);
+                }
+            }
+        }
+
+        async function registrarHorasExtras() {
+            // Limpa erros anteriores
+            limparErros();
+            
+            const idFuncionario = document.getElementById('idFuncionarioInput').value.trim();
+            const data = document.getElementById('dataInput').value;
+            const horas = parseFloat(document.getElementById('horasExtrasInput').value.replace(',', '.'));
+            const observacoes = document.getElementById('observacoesInput').value.trim();
+            
+            // Validações
+            if (!/^\d{2}$/.test(idFuncionario)) {
+                mostrarErro('idFuncionarioInput', 'O ID deve conter exatamente 2 dígitos numéricos (ex: 01, 02)');
+                return;
+            }
+            
+            if (!data) {
+                mostrarErro('dataInput', 'Por favor, selecione uma data');
+                return;
+            }
+            
+            if (isNaN(horas)) {
+                mostrarErro('horasExtrasInput', 'Por favor, insira um valor numérico válido');
+                return;
+            }
+            
+            if (horas <= 0) {
+                mostrarErro('horasExtrasInput', 'As horas devem ser maiores que zero');
+                return;
+            }
+            
+            if (!observacoes || observacoes.length < 5) {
+                mostrarErro('observacoesInput', 'Por favor, insira uma observação válida (mínimo 5 caracteres)');
+                return;
+            }
+            
+            try {
+                toggleLoading('registrarHorasLoading', true);
+                
+                // Verifica se funcionário existe
+                const funcRef = doc(db, "funcionarios", idFuncionario);
+                const docSnap = await getDoc(funcRef);
+                
+                if (!docSnap.exists()) {
+                    mostrarErro('idFuncionarioInput', 'Funcionário não encontrado! Verifique o ID.');
+                    return;
+                }
+                
+                const funcionario = docSnap.data();
+                const dataFormatada = moment(data).format('DD/MM/YYYY');
+                
+                // Adiciona registro
+                await addDoc(collection(db, "registrosHoras"), {
+                    idFuncionario,
+                    data: dataFormatada,
+                    horas,
+                    nome: funcionario.nome,
+                    observacoes,
+                    status: 'Pendente'
+                });
+                
+                // Limpa o formulário
+                document.getElementById('idFuncionarioInput').value = '';
+                document.getElementById('nomeFuncionarioInput').value = '';
+                document.getElementById('horasExtrasInput').value = '';
+                document.getElementById('observacoesInput').value = '';
+                
+                // Atualiza os dados
+                await carregarDados();
+                
+                mostrarSucesso(`Horas extras registradas para ${funcionario.nome}! Aguardando confirmação.`);
+            } catch (e) {
+                console.error("Erro ao registrar horas:", e);
+                mostrarErroGeral("Ocorreu um erro ao registrar. Tente novamente.");
+            } finally {
+                toggleLoading('registrarHorasLoading', false);
+            }
+        }
+
+        async function confirmarHoras() {
+            const senha = document.getElementById('senhaConfirmacaoInput').value;
+            const registro = registrosHoras[registroParaConfirmar];
+            
+            try {
+                toggleLoading('confirmarHorasLoading', true);
+                
+                // Busca o responsável no banco de dados
+                const responsavelRef = doc(db, "funcionarios", registro.idFuncionario);
+                const responsavelSnap = await getDoc(responsavelRef);
+                
+                if (!responsavelSnap.exists() || responsavelSnap.data().cargo !== 'Responsável') {
+                    mostrarErro('senhaConfirmacaoInput', 'Apenas responsáveis podem confirmar horas');
+                    return;
+                }
+                
+                const senhaResponsavel = responsavelSnap.data().senhaConfirmacao || SENHA_RESPONSAVEL_PADRAO;
+                
+                if (senha !== senhaResponsavel) {
+                    mostrarErro('senhaConfirmacaoInput', 'Senha incorreta! Confirmação não autorizada.');
+                    return;
+                }
+                
+                // Atualiza o registro
+                const regRef = doc(db, "registrosHoras", registro.id);
+                
+                await updateDoc(regRef, {
+                    status: 'Confirmado',
+                    dataConfirmacao: moment().format('DD/MM/YYYY HH:mm')
+                });
+                
+                document.getElementById('modalConfirmacao').classList.add('hidden');
+                await carregarDados();
+                
+                mostrarSucesso('Horas extras confirmadas com sucesso!');
+                registroParaConfirmar = null;
+            } catch (e) {
+                console.error("Erro ao confirmar horas:", e);
+                mostrarErro('senhaConfirmacaoInput', "Ocorreu um erro ao confirmar. Tente novamente.");
+            } finally {
+                toggleLoading('confirmarHorasLoading', false);
+            }
+        }
+
+        async function atualizarHistorico() {
+            const dataInicial = document.getElementById('dataInicialFilter').value;
+            const dataFinal = document.getElementById('dataFinalFilter').value;
+            const idFuncionario = document.getElementById('funcionarioFilter').value;
+            const status = document.getElementById('statusFilter').value;
+
+            try {
+                toggleLoading('aplicarFiltroLoading', true);
+                
+                let registros = [];
+
+                if (idFuncionario || status) {
+                    // Caso tenham filtros de igualdade (id/status), pegamos só eles
+                    const condicoes = [];
+                    if (idFuncionario) condicoes.push(where("idFuncionario", "==", idFuncionario));
+                    if (status) condicoes.push(where("status", "==", status));
+
+                    const snap = await getDocs(query(collection(db, "registrosHoras"), ...condicoes));
+                    registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // Filtra período no cliente
+                    registros = registros.filter(r => {
+                        const d = moment(r.data, "DD/MM/YYYY");
+                        return (!dataInicial || d.isSameOrAfter(moment(dataInicial))) &&
+                               (!dataFinal   || d.isSameOrBefore(moment(dataFinal)));
+                    });
+
+                    // Ordena localmente por data desc
+                    registros.sort((a, b) => moment(b.data, "DD/MM/YYYY").diff(moment(a.data, "DD/MM/YYYY")));
+                } else {
+                    // Sem igualdade, podemos usar intervalo + orderBy (um único campo = sem índice composto)
+                    const condicoes = [];
+                    if (dataInicial) condicoes.push(where("data", ">=", moment(dataInicial).format("DD/MM/YYYY")));
+                    if (dataFinal)   condicoes.push(where("data", "<=", moment(dataFinal).format("DD/MM/YYYY")));
+                    condicoes.push(orderBy("data", "desc"));
+
+                    const snap = await getDocs(query(collection(db, "registrosHoras"), ...condicoes));
+                    registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+
+                registrosHoras = registros;
+                atualizarListaHistorico(registrosHoras);
+                atualizarResumoHistorico(registrosHoras, dataInicial, dataFinal, idFuncionario);
+            } catch (e) {
+                console.error("Erro ao filtrar histórico:", e);
+                mostrarErroGeral("Ocorreu um erro ao filtrar. Tente novamente.");
+            } finally {
+                toggleLoading('aplicarFiltroLoading', false);
+            }
+        }
+
+        // Funções de UI
+        function alternarAba(aba) {
+            abaAtiva = aba;
+            
+            // Esconder todas as abas primeiro
+            document.getElementById('conteudoCadastro').classList.add('hidden');
+            document.getElementById('conteudoHoras').classList.add('hidden');
+            document.getElementById('conteudoHistorico').classList.add('hidden');
+            document.getElementById('addButtonContainer').classList.add('hidden');
+            
+            // Resetar estilos das abas
+            document.getElementById('abaCadastro').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+            document.getElementById('abaCadastro').classList.add('text-gray-500');
+            document.getElementById('abaHoras').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+            document.getElementById('abaHoras').classList.add('text-gray-500');
+            document.getElementById('abaHistorico').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+            document.getElementById('abaHistorico').classList.add('text-gray-500');
+            
+            // Mostrar a aba correta
+            if (aba === 'cadastro') {
+                document.getElementById('conteudoCadastro').classList.remove('hidden');
+                document.getElementById('addButtonContainer').classList.remove('hidden');
+                document.getElementById('abaCadastro').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                document.getElementById('abaCadastro').classList.remove('text-gray-500');
+                document.getElementById('tituloPagina').textContent = 'Cadastro';
+            } else if (aba === 'horas') {
+                document.getElementById('conteudoHoras').classList.remove('hidden');
+                document.getElementById('abaHoras').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                document.getElementById('abaHoras').classList.remove('text-gray-500');
+                document.getElementById('tituloPagina').textContent = 'Registrar Horas';
+            } else if (aba === 'historico') {
+                document.getElementById('conteudoHistorico').classList.remove('hidden');
+                document.getElementById('abaHistorico').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                document.getElementById('abaHistorico').classList.remove('text-gray-500');
+                document.getElementById('tituloPagina').textContent = 'Histórico';
+                atualizarFiltroFuncionarios();
+                atualizarHistorico();
+            }
+            
+            // Scroll para o topo
+            window.scrollTo(0, 0);
+        }
+
+        function mostrarFormulario() {
+            document.getElementById('formContainer').classList.remove('hidden');
+            document.getElementById('addFuncionarioBtn').classList.add('hidden');
+            modoEdicao = false;
+            funcionarioEditando = null;
+            limparFormulario();
+            limparErros();
+            
+            // Foca no primeiro campo
+            setTimeout(() => {
+                document.getElementById('nomeInput').focus();
+            }, 100);
+        }
+
+        function esconderFormulario() {
+            document.getElementById('formContainer').classList.add('hidden');
+            document.getElementById('addFuncionarioBtn').classList.remove('hidden');
+            limparErros();
+        }
+
+        function limparFormulario() {
+            document.getElementById('nomeInput').value = '';
+            document.getElementById('cargoInput').value = '';
+            document.getElementById('idInput').value = '';
+            document.getElementById('senhaResponsavelInput').value = '';
+            document.getElementById('idInput').disabled = false;
+            document.getElementById('senhaResponsavelContainer').classList.add('hidden');
+        }
+
+        function limparErros() {
+            document.querySelectorAll('.error-message').forEach(el => {
+                el.textContent = '';
+                el.classList.add('hidden');
+            });
+            document.querySelectorAll('.input-error').forEach(el => {
+                el.classList.remove('input-error');
+            });
+        }
+
+        function mostrarErro(campoId, mensagem) {
+            const input = document.getElementById(campoId);
+            const errorElement = document.getElementById(`${campoId}Error`);
+            
+            if (input && errorElement) {
+                input.classList.add('input-error');
+                errorElement.textContent = mensagem;
+                errorElement.classList.remove('hidden');
+                input.focus();
+            } else {
+                console.error(`Elemento não encontrado: ${campoId} ou ${campoId}Error`);
+            }
+        }
+
+        function mostrarErroGeral(mensagem) {
+            alert(mensagem);
+        }
+
+        function mostrarSucesso(mensagem) {
+            alert(mensagem);
+        }
+
+        function toggleLoading(elementId, show) {
+            const textElement = document.getElementById(elementId.replace('Loading', 'Text'));
+            const loadingElement = document.getElementById(elementId);
+            
+            if (textElement && loadingElement) {
+                if (show) {
+                    textElement.classList.add('hidden');
+                    loadingElement.classList.remove('hidden');
+                } else {
+                    textElement.classList.remove('hidden');
+                    loadingElement.classList.add('hidden');
+                }
+            }
+        }
+
+        function editarFuncionario(id) {
+            const funcionario = funcionarios.find(f => f.id === id);
+            if (funcionario) {
+                mostrarFormulario();
+                modoEdicao = true;
+                funcionarioEditando = funcionario;
+                
+                document.getElementById('nomeInput').value = funcionario.nome;
+                document.getElementById('cargoInput').value = funcionario.cargo;
+                document.getElementById('idInput').value = funcionario.id;
+                document.getElementById('idInput').disabled = true;
+                
+                // Se for responsável, mostra o campo de senha
+                if (funcionario.cargo === 'Responsável') {
+                    document.getElementById('senhaResponsavelContainer').classList.remove('hidden');
+                    document.getElementById('senhaResponsavelInput').value = funcionario.senhaConfirmacao || '';
+                }
+            }
+        }
+
+        function abrirModalConfirmacao(index) {
+            registroParaConfirmar = index;
+            const registro = registrosHoras[index];
+
+            // Abre o modal para digitar a senha do responsável
+            document.getElementById('modalConfirmacao').classList.remove('hidden');
+            document.getElementById('senhaConfirmacaoInput').value = '';
+            document.getElementById('senhaConfirmacaoInput').focus();
+        }
+
+        function cancelarConfirmacao() {
+            document.getElementById('modalConfirmacao').classList.add('hidden');
+            registroParaConfirmar = null;
+            limparErros();
+        }
+
+        function abrirModalEdicaoHoras(index) {
+            registroEditandoIndex = index;
+            document.getElementById('modalEdicaoHoras').classList.remove('hidden');
+            document.getElementById('novasHorasInput').value = registrosHoras[index].horas;
+            document.getElementById('novaObservacaoInput').value = registrosHoras[index].observacoes || '';
+            document.getElementById('senhaEdicaoInput').value = '';
+            document.getElementById('senhaEdicaoInput').focus();
+        }
+
+        function fecharModalEdicao() {
+            document.getElementById('modalEdicaoHoras').classList.add('hidden');
+            limparErros();
+        }
+
+        async function confirmarEdicaoHoras() {
+            const senha = document.getElementById('senhaEdicaoInput').value;
+            const novasHoras = parseFloat(document.getElementById('novasHorasInput').value.replace(',', '.'));
+            const novaObservacao = document.getElementById('novaObservacaoInput').value.trim();
+            
+            // Validações
+            if (senha !== SENHA_EDICAO) {
+                mostrarErro('senhaEdicaoInput', 'Senha incorreta!');
+                return;
+            }
+            
+            if (isNaN(novasHoras)) {
+                mostrarErro('novasHorasInput', 'Por favor, insira um valor numérico válido');
+                return;
+            }
+            
+            if (novasHoras <= 0) {
+                mostrarErro('novasHorasInput', 'As horas devem ser maiores que zero');
+                return;
+            }
+            
+            if (!novaObservacao || novaObservacao.length < 5) {
+                mostrarErro('novaObservacaoInput', 'Por favor, insira uma observação válida (mínimo 5 caracteres)');
+                return;
+            }
+            
+            try {
+                toggleLoading('confirmarEdicaoLoading', true);
+                
+                const registro = registrosHoras[registroEditandoIndex];
+                const regRef = doc(db, "registrosHoras", registro.id);
+                
+                await updateDoc(regRef, {
+                    horas: novasHoras,
+                    observacoes: novaObservacao
+                });
+                
+                fecharModalEdicao();
+                await carregarDados();
+                
+                mostrarSucesso('Horas atualizadas com sucesso!');
+            } catch (e) {
+                console.error("Erro ao atualizar horas:", e);
+                mostrarErroGeral("Ocorreu um erro ao atualizar. Tente novamente.");
+            } finally {
+                toggleLoading('confirmarEdicaoLoading', false);
+            }
+        }
+
+        function removerRegistroHoras(index) {
+            if (confirm('Tem certeza que deseja remover este registro de horas extras?')) {
+                const registro = registrosHoras[index];
+                deleteDoc(doc(db, "registrosHoras", registro.id))
+                    .then(() => {
+                        carregarDados();
+                        mostrarSucesso('Registro removido com sucesso!');
+                    })
+                    .catch(e => {
+                        console.error("Erro ao remover registro:", e);
+                        mostrarErroGeral("Ocorreu um erro ao remover. Tente novamente.");
+                    });
+            }
+        }
+
+        function atualizarFiltroFuncionarios() {
+            const select = document.getElementById('funcionarioFilter');
+            select.innerHTML = '<option value="">Todos</option>';
+            
+            funcionarios.forEach(funcionario => {
+                const option = document.createElement('option');
+                option.value = funcionario.id;
+                option.textContent = `${funcionario.nome} (ID: ${funcionario.id})`;
+                select.appendChild(option);
+            });
+        }
+
+        function aplicarFiltroHistorico() {
+            atualizarHistorico();
+        }
+
+        function atualizarListaHistorico(registros) {
+            const lista = document.getElementById('listaHistorico');
+            lista.innerHTML = '';
+            
+            if (registros.length === 0) {
+                document.getElementById('semRegistrosHistorico').classList.remove('hidden');
+                return;
+            }
+            
+            document.getElementById('semRegistrosHistorico').classList.add('hidden');
+            
+            registros.forEach((registro, index) => {
+                const funcionario = funcionarios.find(f => f.id === registro.idFuncionario) || { nome: 'Funcionário não encontrado' };
+                
+                const registroElement = document.createElement('div');
+                registroElement.className = `bg-white p-3 rounded-lg border border-gray-200 ${registro.horas < 0 ? 'registro-desconto' : ''}`;
+                
+                let botoes = '';
+                if (registro.status === 'Pendente') {
+                    botoes = `
+                        <button onclick="abrirModalConfirmacao(${index})" 
+                            class="px-2 py-1 bg-green-600 text-white rounded-lg text-xs active:bg-green-700">
+                            Confirmar
+                        </button>
+                    `;
+                } else {
+                    botoes = `
+                        <span class="text-xs text-gray-500">
+                            Confirmado em ${registro.dataConfirmacao}
+                        </span>
+                    `;
+                }
+                
+                registroElement.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate">${funcionario.nome}</p>
+                            <p class="text-xs text-gray-500">${registro.data} - 
+                                <span class="${registro.status === 'Pendente' ? 'status-pendente' : 'status-confirmado'}">
+                                    ${registro.status}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="flex flex-col items-end ml-2">
+                            <p class="font-bold ${registro.horas < 0 ? 'text-red-600' : 'text-blue-600'} whitespace-nowrap">
+                                ${registro.horas.toFixed(1).replace('.', ',')}h
+                            </p>
+                            ${botoes}
+                        </div>
+                    </div>
+                    ${registro.observacoes ? `
+                        <div class="mt-2 p-2 bg-gray-50 rounded text-sm">
+                            <p class="font-medium text-gray-700">Observações:</p>
+                            <p class="text-gray-600 whitespace-pre-wrap">${registro.observacoes}</p>
+                        </div>
+                    ` : ''}
+                `;
+                lista.appendChild(registroElement);
+            });
+        }
+
+        function atualizarResumoHistorico(registros, dataInicial, dataFinal, idFuncionario) {
+            const totalHoras = registros
+                .filter(r => r.status === 'Confirmado')
+                .reduce((sum, r) => sum + r.horas, 0);
+                
+            document.getElementById('totalHorasHistorico').textContent = totalHoras.toFixed(1).replace('.', ',');
+            
+            let periodoTexto = 'Todos os registros';
+            if (dataInicial || dataFinal) {
+                periodoTexto = `De ${dataInicial ? moment(dataInicial).format('DD/MM/YYYY') : 'início'} até ${dataFinal ? moment(dataFinal).format('DD/MM/YYYY') : 'hoje'}`;
+            }
+            
+            if (idFuncionario) {
+                const funcionario = funcionarios.find(f => f.id === idFuncionario);
+                periodoTexto += ` | ${funcionario ? funcionario.nome : 'Funcionário não encontrado'}`;
+            }
+            
+            document.getElementById('periodoSelecionado').textContent = periodoTexto;
+        }
+
+        function atualizarListaFuncionarios() {
+            const lista = document.getElementById('listaFuncionarios');
+            lista.innerHTML = '';
+            
+            if (funcionarios.length === 0) {
+                lista.innerHTML = '<p class="text-center py-4 text-gray-500">Nenhum funcionário cadastrado</p>';
+                document.getElementById('totalFuncionarios').textContent = '0 cadastrados';
+                return;
+            }
+            
+            funcionarios.forEach(funcionario => {
+                const funcionarioElement = document.createElement('div');
+                funcionarioElement.className = 'bg-white p-3 rounded-lg border border-gray-200';
+                funcionarioElement.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate">${funcionario.nome}</p>
+                            <p class="text-xs text-gray-500 truncate">${funcionario.cargo}</p>
+                            <p class="text-xs text-gray-400 mt-1">ID: ${funcionario.id}</p>
+                        </div>
+                        <div class="flex gap-2 ml-2">
+                            <button onclick="editarFuncionario('${funcionario.id}')" class="text-blue-600 text-sm active:text-blue-700">
+                                Editar
+                            </button>
+                            <button onclick="removerFuncionario('${funcionario.id}')" class="text-red-600 text-sm active:text-red-700">
+                                Remover
+                            </button>
+                        </div>
+                    </div>
+                `;
+                lista.appendChild(funcionarioElement);
+            });
+            
+            document.getElementById('totalFuncionarios').textContent = `${funcionarios.length} ${funcionarios.length === 1 ? 'cadastrado' : 'cadastrados'}`;
+        }
+
+        function exportarParaPDF() {
+            try {
+                toggleLoading('exportPdfLoading', true);
+                
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Título
+                doc.setFontSize(16);
+                doc.text('Relatório de Funcionários', 105, 15, { align: 'center' });
+                
+                // Data
+                doc.setFontSize(10);
+                doc.text(`Gerado em: ${moment().format('DD/MM/YYYY HH:mm')}`, 105, 22, { align: 'center' });
+                
+                // Cabeçalho da tabela
+                doc.setFontSize(12);
+                doc.setDrawColor(200);
+                doc.setFillColor(230, 230, 230);
+                doc.rect(10, 30, 190, 10, 'F');
+                doc.text('ID', 15, 37);
+                doc.text('Nome', 50, 37);
+                doc.text('Cargo', 140, 37);
+                
+                // Conteúdo da tabela
+                let y = 45;
+                doc.setFontSize(10);
+                
+                funcionarios.forEach(func => {
+                    doc.text(func.id, 15, y);
+                    doc.text(func.nome, 50, y);
+                    doc.text(func.cargo, 140, y);
+                    y += 7;
+                    
+                    // Quebra de página se necessário
+                    if (y > 280) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                });
+                
+                // Total
+                doc.setFontSize(12);
+                doc.text(`Total: ${funcionarios.length} funcionário${funcionarios.length !== 1 ? 's' : ''}`, 105, y+10, { align: 'center' });
+                
+                // Abre o PDF em uma nova aba
+                const pdfBlob = doc.output('blob');
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                window.open(pdfUrl, '_blank');
+            } catch (e) {
+                console.error('Erro ao gerar PDF:', e);
+                mostrarErroGeral('Não foi possível gerar o PDF. Tente novamente.');
+            } finally {
+                toggleLoading('exportPdfLoading', false);
+            }
+        }
+
+        function exportarParaExcel() {
+            try {
+                toggleLoading('exportExcelLoading', true);
+                
+                // Preparar dados
+                const dados = [
+                    ['ID', 'Nome', 'Cargo'],
+                    ...funcionarios.map(f => [f.id, f.nome, f.cargo])
+                ];
+                
+                // Criar planilha
+                const ws = XLSX.utils.aoa_to_sheet(dados);
+                ws['!cols'] = [
+                    { wch: 10 },
+                    { wch: 30 },
+                    { wch: 25 }
+                ];
+                
+                // Criar workbook
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Funcionários");
+                
+                // Gerar arquivo
+                XLSX.writeFile(wb, "funcionarios.xlsx");
+            } catch (e) {
+                console.error('Erro ao exportar para Excel:', e);
+                mostrarErroGeral('Não foi possível exportar para Excel. Tente novamente.');
+            } finally {
+                toggleLoading('exportExcelLoading', false);
+            }
+        }
+
+        function exportarHistoricoParaPDF() {
+            try {
+                toggleLoading('exportPdfHistoricoLoading', true);
+                
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Título
+                doc.setFontSize(16);
+                doc.text('Relatório de Horas Extras', 105, 15, { align: 'center' });
+                
+                // Filtros aplicados
+                doc.setFontSize(10);
+                
+                const dataInicial = document.getElementById('dataInicialFilter').value;
+                const dataFinal = document.getElementById('dataFinalFilter').value;
+                const funcionarioId = document.getElementById('funcionarioFilter').value;
+                const status = document.getElementById('statusFilter').value;
+                
+                let filtros = 'Filtros: ';
+                if (dataInicial) filtros += `De ${moment(dataInicial).format('DD/MM/YYYY')} `;
+                if (dataFinal) filtros += `Até ${moment(dataFinal).format('DD/MM/YYYY')} `;
+                if (funcionarioId) {
+                    const func = funcionarios.find(f => f.id === funcionarioId);
+                    filtros += `Funcionário: ${func ? func.nome : funcionarioId} `;
+                }
+                if (status) filtros += `Status: ${status} `;
+                
+                if (filtros.length > 9) {
+                    doc.text(filtros, 14, 25);
+                }
+                
+                // Data de geração
+                doc.text(`Gerado em: ${moment().format('DD/MM/YYYY HH:mm')}`, 105, 30, { align: 'center' });
+                
+                // Cabeçalho da tabela
+                doc.setFontSize(12);
+                doc.setDrawColor(200);
+                doc.setFillColor(230, 230, 230);
+                doc.rect(10, 40, 190, 10, 'F');
+                doc.text('Data', 15, 47);
+                doc.text('Funcionário', 50, 47);
+                doc.text('Horas', 140, 47);
+                doc.text('Status', 170, 47);
+                
+                // Conteúdo da tabela
+                let y = 55;
+                doc.setFontSize(10);
+                
+                registrosHoras.forEach(reg => {
+                    const funcionario = funcionarios.find(f => f.id === reg.idFuncionario) || { nome: 'Desconhecido' };
+                    
+                    doc.text(reg.data, 15, y);
+                    doc.text(funcionario.nome, 50, y);
+                    doc.text(reg.horas.toFixed(1).replace('.', ','), 140, y);
+                    doc.text(reg.status, 170, y);
+                    y += 7;
+                    
+                    // Quebra de página se necessário
+                    if (y > 280) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                });
+                
+                // Total de horas
+                const totalHoras = registrosHoras
+                    .filter(r => r.status === 'Confirmado')
+                    .reduce((sum, r) => sum + r.horas, 0);
+                
+                doc.setFontSize(12);
+                doc.text(`Total de horas confirmadas: ${totalHoras.toFixed(1).replace('.', ',')}h`, 105, y+10, { align: 'center' });
+                
+                // Abre o PDF em uma nova aba
+                const pdfBlob = doc.output('blob');
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                window.open(pdfUrl, '_blank');
+            } catch (e) {
+                console.error('Erro ao gerar PDF do histórico:', e);
+                mostrarErroGeral('Não foi possível gerar o PDF do histórico. Tente novamente.');
+            } finally {
+                toggleLoading('exportPdfHistoricoLoading', false);
+            }
+        }
+
+        function exportarHistoricoParaExcel() {
+            try {
+                toggleLoading('exportExcelHistoricoLoading', true);
+                
+                // Preparar dados
+                const dados = [
+                    ['Data', 'ID Funcionário', 'Funcionário', 'Horas', 'Status', 'Observações'],
+                    ...registrosHoras.map(reg => {
+                        const funcionario = funcionarios.find(f => f.id === reg.idFuncionario) || { nome: 'Desconhecido' };
+                        return [
+                            reg.data,
+                            reg.idFuncionario,
+                            funcionario.nome,
+                            reg.horas,
+                            reg.status,
+                            reg.observacoes
+                        ];
+                    })
+                ];
+                
+                // Criar planilha
+                const ws = XLSX.utils.aoa_to_sheet(dados);
+                ws['!cols'] = [
+                    { wch: 12 }, // Data
+                    { wch: 10 }, // ID
+                    { wch: 30 }, // Nome
+                    { wch: 8 },  // Horas
+                    { wch: 12 }, // Status
+                    { wch: 50 }  // Observações
+                ];
+                
+                // Criar workbook
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Histórico de Horas");
+                
+                // Gerar arquivo
+                XLSX.writeFile(wb, "historico_horas.xlsx");
+            } catch (e) {
+                console.error('Erro ao exportar histórico para Excel:', e);
+                mostrarErroGeral('Não foi possível exportar o histórico para Excel. Tente novamente.');
+            } finally {
+                toggleLoading('exportExcelHistoricoLoading', false);
+            }
+        }
+
+        function abrirModalDesconto() {
+            document.getElementById('modalDescontoHoras').classList.remove('hidden');
+            document.getElementById('senhaDescontoInput').value = '';
+            document.getElementById('horasDescontoInput').value = '';
+            document.getElementById('observacoesDescontoInput').value = '';
+            document.getElementById('dataDescontoInput').valueAsDate = new Date();
+            limparErrosDesconto();
+            
+            // Preenche o select de funcionários
+            const select = document.getElementById('funcionarioDescontoSelect');
+            select.innerHTML = '<option value="">Selecione o funcionário</option>';
+            
+            funcionarios.forEach(funcionario => {
+                const option = document.createElement('option');
+                option.value = funcionario.id;
+                option.textContent = `${funcionario.nome} (ID: ${funcionario.id})`;
+                select.appendChild(option);
+            });
+        }
+
+        function limparErrosDesconto() {
+            const campos = [
+                'funcionarioDesconto',
+                'horasDesconto',
+                'dataDesconto',
+                'observacoesDesconto',
+                'senhaDesconto'
+            ];
+            
+            campos.forEach(campo => {
+                document.getElementById(`${campo}Error`).textContent = '';
+                document.getElementById(`${campo}Error`).classList.add('hidden');
+            });
+        }
+
+        function fecharModalDesconto() {
+            document.getElementById('modalDescontoHoras').classList.add('hidden');
+            limparErrosDesconto();
+        }
+
+        async function confirmarDescontoHoras() {
+            limparErrosDesconto();
+            
+            const idFuncionario = document.getElementById('funcionarioDescontoSelect').value;
+            const horas = parseFloat(document.getElementById('horasDescontoInput').value.replace(',', '.'));
+            const data = document.getElementById('dataDescontoInput').value;
+            const observacoes = document.getElementById('observacoesDescontoInput').value.trim();
+            const senha = document.getElementById('senhaDescontoInput').value;
+            
+            // Validações
+            if (!idFuncionario) {
+                mostrarErro('funcionarioDescontoSelect', 'Selecione um funcionário');
+                return;
+            }
+            
+            if (isNaN(horas) || horas <= 0) {
+                mostrarErro('horasDescontoInput', 'Insira um valor válido (maior que 0)');
+                return;
+            }
+            
+            if (!data) {
+                mostrarErro('dataDescontoInput', 'Selecione uma data');
+                return;
+            }
+            
+            if (!observacoes || observacoes.length < 5) {
+                mostrarErro('observacoesDescontoInput', 'Insira uma observação válida (mínimo 5 caracteres)');
+                return;
+            }
+            
+            if (senha !== SENHA_SUPERIOR) {
+                mostrarErro('senhaDescontoInput', 'Senha incorreta!');
+                return;
+            }
+            
+            try {
+                toggleLoading('confirmarDescontoLoading', true);
+                
+                const funcionario = funcionarios.find(f => f.id === idFuncionario);
+                const dataFormatada = moment(data).format('DD/MM/YYYY');
+                
+                // Registra como horas negativas
+                await addDoc(collection(db, "registrosHoras"), {
+                    idFuncionario,
+                    data: dataFormatada,
+                    horas: -Math.abs(horas), // Garante que será negativo
+                    nome: funcionario.nome,
+                    observacoes: `DESCONTO: ${observacoes}`,
+                    status: 'Confirmado',
+                    dataConfirmacao: moment().format('DD/MM/YYYY HH:mm')
+                });
+                
+                fecharModalDesconto();
+                await carregarDados();
+                
+                mostrarSucesso(`Desconto de ${horas.toFixed(1)}h registrado para ${funcionario.nome}!`);
+            } catch (e) {
+                console.error("Erro ao registrar desconto:", e);
+                mostrarErroGeral("Ocorreu um erro ao registrar o desconto. Tente novamente.");
+            } finally {
+                toggleLoading('confirmarDescontoLoading', false);
+            }
+        }
+
+        function verificarSenhaAcesso(aba) {
+            // Se for a aba de horas, não precisa de senha
+            if (aba === 'horas') {
+                alternarAba(aba);
+                return;
+            }
+            
+            // Se já estiver na aba solicitada, não faz nada
+            if (abaAtiva === aba) return;
+            
+            // Para cadastro e histórico, verifica senha
+            abaSolicitada = aba;
+            document.getElementById('modalSenhaAcesso').classList.remove('hidden');
+            document.getElementById('senhaAcessoInput').value = '';
+            document.getElementById('senhaAcessoInput').focus();
+        }
+
+        function cancelarAcesso() {
+            document.getElementById('modalSenhaAcesso').classList.add('hidden');
+            abaSolicitada = null;
+            limparErros();
+        }
+
+        function confirmarAcesso() {
+            const senha = document.getElementById('senhaAcessoInput').value;
+            
+            if (senha !== SENHA_ACESSO) {
+                mostrarErro('senhaAcessoInput', 'Senha incorreta!');
+                return;
+            }
+            
+            document.getElementById('modalSenhaAcesso').classList.add('hidden');
+            alternarAba(abaSolicitada);
+            abaSolicitada = null;
+        }
+
+        function focarProximoCampo(currentField, nextFieldId) {
+            currentField.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById(nextFieldId).focus();
+                }
+            });
+        }
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', async function() {
+            moment.locale('pt-br');
+            
+            // Configura data atual como padrão
+            const hoje = new Date();
+            document.getElementById('dataInput').valueAsDate = hoje;
+            document.getElementById('dataFinalFilter').valueAsDate = hoje;
+            document.getElementById('dataDescontoInput').valueAsDate = hoje;
+            
+            // Event Listeners
+            document.getElementById('addFuncionarioBtn').addEventListener('click', mostrarFormulario);
+            document.getElementById('cancelarBtn').addEventListener('click', esconderFormulario);
+            document.getElementById('salvarBtn').addEventListener('click', salvarFuncionario);
+            document.getElementById('registrarHorasBtn').addEventListener('click', registrarHorasExtras);
+            
+            // Mostrar/ocultar campo de senha para responsáveis
+            document.getElementById('cargoInput').addEventListener('change', function() {
+                const senhaContainer = document.getElementById('senhaResponsavelContainer');
+                if (this.value === 'Responsável') {
+                    senhaContainer.classList.remove('hidden');
+                    document.getElementById('senhaResponsavelInput').required = true;
+                } else {
+                    senhaContainer.classList.add('hidden');
+                    document.getElementById('senhaResponsavelInput').required = false;
+                }
+            });
+            
+            // Exportação
+            document.getElementById('exportPdfBtn').addEventListener('click', exportarParaPDF);
+            document.getElementById('exportExcelBtn').addEventListener('click', exportarParaExcel);
+            document.getElementById('exportPdfHistoricoBtn').addEventListener('click', exportarHistoricoParaPDF);
+            document.getElementById('exportExcelHistoricoBtn').addEventListener('click', exportarHistoricoParaExcel);
+            
+            // Navegação entre abas
+            document.getElementById('abaCadastro').addEventListener('click', () => {
+                if (abaAtiva !== 'cadastro') verificarSenhaAcesso('cadastro');
+            });
+
+            document.getElementById('abaHoras').addEventListener('click', () => {
+                if (abaAtiva !== 'horas') alternarAba('horas');
+            });
+
+            document.getElementById('abaHistorico').addEventListener('click', () => {
+                if (abaAtiva !== 'historico') verificarSenhaAcesso('historico');
+            });
+            
+            // Modal de edição
+            document.getElementById('cancelarEdicaoBtn').addEventListener('click', fecharModalEdicao);
+            document.getElementById('confirmarEdicaoBtn').addEventListener('click', confirmarEdicaoHoras);
+            
+            // Modal de confirmação
+            document.getElementById('cancelarConfirmacaoBtn').addEventListener('click', cancelarConfirmacao);
+            document.getElementById('confirmarHorasBtn').addEventListener('click', confirmarHoras);
+            
+            // Modal de desconto
+            document.getElementById('descontarHorasBtn').addEventListener('click', abrirModalDesconto);
+            document.getElementById('cancelarDescontoBtn').addEventListener('click', fecharModalDesconto);
+            document.getElementById('confirmarDescontoBtn').addEventListener('click', confirmarDescontoHoras);
+            
+            // Modal de senha para acesso
+            document.getElementById('cancelarAcessoBtn').addEventListener('click', cancelarAcesso);
+            document.getElementById('confirmarAcessoBtn').addEventListener('click', confirmarAcesso);
+            
+            // Filtros do histórico
+            document.getElementById('aplicarFiltroBtn').addEventListener('click', aplicarFiltroHistorico);
+            
+            // Evento para mostrar nome do funcionário automaticamente
+            document.getElementById('idFuncionarioInput').addEventListener('input', function() {
+                const id = this.value.trim();
+                const nomeInput = document.getElementById('nomeFuncionarioInput');
+                
+                if (id.length === 2) {
+                    const funcionario = funcionarios.find(f => f.id === id);
+                    nomeInput.value = funcionario ? funcionario.nome : "Funcionário não encontrado";
+                } else {
+                    nomeInput.value = "";
+                }
+            });
+            
+            // Melhorias na entrada de dados
+            document.getElementById('horasExtrasInput').addEventListener('input', function(e) {
+                this.value = this.value.replace(',', '.').replace(/[^0-9.]/g, '');
+            });
+            
+            // Navegação entre campos
+            focarProximoCampo(document.getElementById('idFuncionarioInput'), 'dataInput');
+            focarProximoCampo(document.getElementById('dataInput'), 'horasExtrasInput');
+            focarProximoCampo(document.getElementById('horasExtrasInput'), 'observacoesInput');
+            
+            // Previne zoom em inputs no iOS
+            document.addEventListener('gesturestart', function(e) {
+                e.preventDefault();
+            });
+            
+            // Carrega dados do Firestore
+            await carregarDados();
+        });
+
+        // Torna funções disponíveis globalmente para os event listeners no HTML
+        window.abrirModalConfirmacao = abrirModalConfirmacao;
+        window.editarFuncionario = editarFuncionario;
+        window.removerFuncionario = removerFuncionario;
+        window.removerRegistroHoras = removerRegistroHoras;
+        window.abrirModalEdicaoHoras = abrirModalEdicaoHoras;
+        window.abrirModalDesconto = abrirModalDesconto;
+    </script>
+</body>
+</html>
