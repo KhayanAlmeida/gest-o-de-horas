@@ -234,17 +234,6 @@
                         </select>
                         <span class="error-message" id="cargoError"></span>
                     </div>
-                    <div id="senhaResponsavelContainer" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Senha do Responsável</label>
-                        <input
-                            type="password"
-                            id="senhaResponsavelInput"
-                            class="w-full p-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-blue-500 senha-input"
-                            placeholder="Digite a senha para confirmar horas"
-                            minlength="4"
-                        >
-                        <span class="error-message" id="senhaResponsavelError"></span>
-                    </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">ID (2 dígitos)</label>
                         <input
@@ -494,15 +483,31 @@
         <div class="bg-white rounded-lg p-4 w-full max-w-sm mx-4 modal-content">
             <h3 class="text-lg font-bold mb-3">Confirmação do Superior</h3>
             <div class="space-y-3">
-                <p class="text-sm text-gray-600">Digite a senha para confirmar as horas extras:</p>
-                <input
-                    type="password"
-                    id="senhaConfirmacaoInput"
-                    placeholder="Digite a senha"
-                    class="w-full p-2 border rounded-lg senha-input"
-                    required
-                >
-                <span class="error-message" id="senhaConfirmacaoError"></span>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Superior Responsável</label>
+                    <select
+                        id="superiorConfirmacaoSelect"
+                        class="w-full p-2 border rounded-lg"
+                        required
+                    >
+                        <option value="">Selecione o superior</option>
+                        <!-- Opções serão preenchidas dinamicamente -->
+                    </select>
+                    <span class="error-message" id="superiorConfirmacaoError"></span>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Senha</label>
+                    <input
+                        type="password"
+                        id="senhaConfirmacaoInput"
+                        placeholder="Digite a senha"
+                        class="w-full p-2 border rounded-lg senha-input"
+                        required
+                    >
+                    <span class="error-message" id="senhaConfirmacaoError"></span>
+                </div>
+                
                 <div class="flex justify-end gap-2">
                     <button
                         id="cancelarConfirmacaoBtn"
@@ -719,7 +724,7 @@
         async function criarDadosIniciais() {
             const dadosIniciais = [
                 { nome: 'Carlos Silva', cargo: 'Funcionário', id: '01' },
-                { nome: 'Ana Souza', cargo: 'Responsável', id: '02', senhaConfirmacao: '4959' },
+                { nome: 'Ana Souza', cargo: 'Responsável', id: '02' },
                 { nome: 'Pedro Oliveira', cargo: 'Designer', id: '03' }
             ];
             
@@ -728,8 +733,7 @@
                 await setDoc(doc(db, "funcionarios", func.id), {
                     nome: func.nome,
                     cargo: func.cargo,
-                    id: func.id,
-                    ...(func.senhaConfirmacao && { senhaConfirmacao: func.senhaConfirmacao })
+                    id: func.id
                 });
             }
             
@@ -782,7 +786,6 @@
             const nome = document.getElementById('nomeInput').value.trim();
             const cargo = document.getElementById('cargoInput').value.trim();
             const id = document.getElementById('idInput').value.trim();
-            const senhaResponsavel = document.getElementById('senhaResponsavelInput').value;
 
             if (!/^\d{2}$/.test(id)) {
                 mostrarErro('idInput', 'O ID deve conter exatamente 2 dígitos numéricos (ex: 01, 02)');
@@ -799,13 +802,6 @@
                 return;
             }
 
-            if (cargo === 'Responsável') {
-                if (!senhaResponsavel || senhaResponsavel.length < 4) {
-                    mostrarErro('senhaResponsavelInput', 'A senha deve ter pelo menos 4 caracteres');
-                    return;
-                }
-            }
-
             try {
                 toggleLoading('salvarBtnLoading', true);
                 
@@ -816,10 +812,6 @@
                     cargo,
                     id
                 };
-
-                if (cargo === 'Responsável') {
-                    dadosFuncionario.senhaConfirmacao = senhaResponsavel || SENHA_RESPONSAVEL_PADRAO;
-                }
 
                 if (modoEdicao && funcionarioEditando) {
                     if (id !== funcionarioEditando.id) {
@@ -969,15 +961,25 @@
 
         async function confirmarHoras() {
             const senha = document.getElementById('senhaConfirmacaoInput').value;
+            const superiorId = document.getElementById('superiorConfirmacaoSelect').value;
             const registro = registrosHoras[registroParaConfirmar];
             
             try {
                 toggleLoading('confirmarHorasLoading', true);
                 
+                if (!superiorId) {
+                    mostrarErro('superiorConfirmacaoSelect', 'Selecione um superior');
+                    return;
+                }
+                
                 if (senha !== SENHA_RESPONSAVEL_PADRAO) {
                     mostrarErro('senhaConfirmacaoInput', 'Senha incorreta! Confirmação não autorizada.');
                     return;
                 }
+                
+                // Obtém o nome do superior (apenas primeiro nome)
+                const superior = funcionarios.find(f => f.id === superiorId);
+                const primeiroNomeSuperior = superior.nome.split(' ')[0];
                 
                 // Atualiza o registro
                 const regRef = doc(db, "registrosHoras", registro.id);
@@ -985,13 +987,13 @@
                 await updateDoc(regRef, {
                     status: 'Confirmado',
                     dataConfirmacao: moment().format('DD/MM/YYYY HH:mm'),
-                    confirmadoPor: 'admin'
+                    confirmadoPor: superiorId
                 });
                 
                 document.getElementById('modalConfirmacao').classList.add('hidden');
                 await carregarDados();
                 
-                mostrarSucesso('Horas extras confirmadas com sucesso!');
+                mostrarSucesso(`Horas extras confirmadas por ${primeiroNomeSuperior}!`);
                 registroParaConfirmar = null;
             } catch (e) {
                 console.error("Erro ao confirmar horas:", e);
@@ -1134,9 +1136,7 @@
             document.getElementById('nomeInput').value = '';
             document.getElementById('cargoInput').value = '';
             document.getElementById('idInput').value = '';
-            document.getElementById('senhaResponsavelInput').value = '';
             document.getElementById('idInput').disabled = false;
-            document.getElementById('senhaResponsavelContainer').classList.add('hidden');
         }
 
         function limparErros() {
@@ -1195,19 +1195,29 @@
                 document.getElementById('cargoInput').value = funcionario.cargo;
                 document.getElementById('idInput').value = funcionario.id;
                 document.getElementById('idInput').disabled = true;
-                
-                if (funcionario.cargo === 'Responsável') {
-                    document.getElementById('senhaResponsavelContainer').classList.remove('hidden');
-                    document.getElementById('senhaResponsavelInput').value = funcionario.senhaConfirmacao || '';
-                }
             }
         }
 
         function abrirModalConfirmacao(index) {
             registroParaConfirmar = index;
-            document.getElementById('modalConfirmacao').classList.remove('hidden');
+            const modal = document.getElementById('modalConfirmacao');
+            modal.classList.remove('hidden');
+            
+            // Preenche a lista de superiores
+            const select = document.getElementById('superiorConfirmacaoSelect');
+            select.innerHTML = '<option value="">Selecione o superior</option>';
+            
+            funcionarios.forEach(funcionario => {
+                if (funcionario.cargo === 'Responsável') {
+                    const option = document.createElement('option');
+                    option.value = funcionario.id;
+                    option.textContent = funcionario.nome.split(' ')[0]; // Mostra apenas o primeiro nome
+                    select.appendChild(option);
+                }
+            });
+            
             document.getElementById('senhaConfirmacaoInput').value = '';
-            document.getElementById('senhaConfirmacaoInput').focus();
+            document.getElementById('superiorConfirmacaoSelect').focus();
         }
 
         function cancelarConfirmacao() {
@@ -1340,7 +1350,7 @@
                 } else if (registro.status === 'Confirmado') {
                     botoes = `
                         <span class="text-xs text-gray-500">
-                            Confirmado por ${confirmadoPor ? confirmadoPor.nome : 'N/A'} em ${registro.dataConfirmacao}
+                            Confirmado por ${confirmadoPor ? confirmadoPor.nome.split(' ')[0] : 'N/A'} em ${registro.dataConfirmacao}
                         </span>
                     `;
                 }
@@ -1761,14 +1771,7 @@
             document.getElementById('registrarHorasBtn').addEventListener('click', registrarHorasExtras);
             
             document.getElementById('cargoInput').addEventListener('change', function() {
-                const senhaContainer = document.getElementById('senhaResponsavelContainer');
-                if (this.value === 'Responsável') {
-                    senhaContainer.classList.remove('hidden');
-                    document.getElementById('senhaResponsavelInput').required = true;
-                } else {
-                    senhaContainer.classList.add('hidden');
-                    document.getElementById('senhaResponsavelInput').required = false;
-                }
+                // Removida a verificação de senha para responsáveis
             });
             
             document.getElementById('exportPdfBtn').addEventListener('click', exportarParaPDF);
