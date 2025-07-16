@@ -126,6 +126,7 @@
                     </svg>
                 </button>
                 <h1 class="text-gray-900 text-lg font-bold text-center px-2 flex-1" id="tituloPagina">Registrar Horas</h1>
+                <div id="usuarioLogado" class="text-sm text-gray-600 hidden"></div>
             </div>
         </div>
 
@@ -632,7 +633,7 @@
                         id="confirmarAcessoBtn"
                         class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                     >
-                        <span id="confirmarAcessoText">Acessar</span>
+                        <span id="confirmarAcessoText">Confirmar</span>
                         <div id="confirmarAcessoLoading" class="loading-spinner hidden"></div>
                     </button>
                 </div>
@@ -680,17 +681,13 @@
         let funcionarioEditando = null;
         let abaAtiva = 'horas';
         let registroEditandoIndex = null;
-        const SENHA_EDICAO = '4959';
-        const SENHA_SUPERIOR = '4959';
-        const SENHA_ACESSO = '4959';
-        const SENHA_RESPONSAVEL_PADRAO = '1234';
+        const SENHA_RESPONSAVEL_PADRAO = '4959'; // Senha padrão alterada para 4959
         let registroParaConfirmar = null;
-        let abaSolicitada = null;
+        let usuarioLogado = { cargo: 'Responsável' }; // Definido como responsável por padrão
 
         // Funções de Firestore
         async function carregarDados() {
             try {
-                // Mostrar loading
                 toggleLoading('aplicarFiltroLoading', true);
                 
                 // Carrega funcionários
@@ -721,8 +718,8 @@
 
         async function criarDadosIniciais() {
             const dadosIniciais = [
-                { nome: 'Carlos Silva', cargo: 'Desenvolvedor', id: '01' },
-                { nome: 'Ana Souza', cargo: 'Responsável', id: '02', senhaConfirmacao: '1234' },
+                { nome: 'Carlos Silva', cargo: 'Funcionário', id: '01' },
+                { nome: 'Ana Souza', cargo: 'Responsável', id: '02', senhaConfirmacao: '4959' },
                 { nome: 'Pedro Oliveira', cargo: 'Designer', id: '03' }
             ];
             
@@ -748,7 +745,8 @@
                     nome: 'Carlos Silva', 
                     observacoes: 'Projeto urgente', 
                     status: 'Confirmado', 
-                    dataConfirmacao: moment().subtract(2, 'days').format('DD/MM/YYYY HH:mm') 
+                    dataConfirmacao: moment().subtract(2, 'days').format('DD/MM/YYYY HH:mm'),
+                    confirmadoPor: '02'
                 },
                 { 
                     idFuncionario: '02', 
@@ -757,7 +755,8 @@
                     nome: 'Ana Souza', 
                     observacoes: 'Reunião com cliente', 
                     status: 'Confirmado', 
-                    dataConfirmacao: moment().subtract(1, 'days').format('DD/MM/YYYY HH:mm') 
+                    dataConfirmacao: moment().subtract(1, 'days').format('DD/MM/YYYY HH:mm'),
+                    confirmadoPor: '02'
                 },
                 { 
                     idFuncionario: '01', 
@@ -778,7 +777,6 @@
         }
 
         async function salvarFuncionario() {
-            // Limpa erros anteriores
             limparErros();
             
             const nome = document.getElementById('nomeInput').value.trim();
@@ -786,7 +784,6 @@
             const id = document.getElementById('idInput').value.trim();
             const senhaResponsavel = document.getElementById('senhaResponsavelInput').value;
 
-            // Validações
             if (!/^\d{2}$/.test(id)) {
                 mostrarErro('idInput', 'O ID deve conter exatamente 2 dígitos numéricos (ex: 01, 02)');
                 return;
@@ -802,7 +799,6 @@
                 return;
             }
 
-            // Validação adicional para cargo de responsável
             if (cargo === 'Responsável') {
                 if (!senhaResponsavel || senhaResponsavel.length < 4) {
                     mostrarErro('senhaResponsavelInput', 'A senha deve ter pelo menos 4 caracteres');
@@ -821,25 +817,19 @@
                     id
                 };
 
-                // Adiciona senha apenas para responsáveis
                 if (cargo === 'Responsável') {
                     dadosFuncionario.senhaConfirmacao = senhaResponsavel || SENHA_RESPONSAVEL_PADRAO;
                 }
 
                 if (modoEdicao && funcionarioEditando) {
-                    // ATUALIZAÇÃO - Verifica se o ID foi alterado
                     if (id !== funcionarioEditando.id) {
                         mostrarErro('idInput', 'Não é possível alterar o ID de um funcionário existente');
                         return;
                     }
                     
-                    // Atualiza funcionário existente
                     await updateDoc(funcRef, dadosFuncionario);
-                    
-                    // Atualiza registros de horas com o novo nome
                     await atualizarNomeNosRegistros(id, nome);
                 } else {
-                    // CRIAÇÃO - Verifica se ID já existe
                     const docSnap = await getDoc(funcRef);
                     
                     if (docSnap.exists()) {
@@ -847,11 +837,9 @@
                         return;
                     }
                     
-                    // Adiciona novo funcionário
                     await setDoc(funcRef, dadosFuncionario);
                 }
                 
-                // Atualiza a interface
                 await carregarDados();
                 esconderFormulario();
                 mostrarSucesso(`Funcionário ${modoEdicao ? 'atualizado' : 'cadastrado'} com sucesso!`);
@@ -877,7 +865,6 @@
                 await Promise.all(atualizacoes);
             } catch (e) {
                 console.error("Erro ao atualizar registros:", e);
-                // Não interrompe o fluxo principal, apenas loga o erro
             }
         }
 
@@ -886,10 +873,8 @@
                 try {
                     toggleLoading('salvarBtnLoading', true);
                     
-                    // Remove funcionário
                     await deleteDoc(doc(db, "funcionarios", id));
                     
-                    // Remove registros associados
                     const registrosRef = collection(db, "registrosHoras");
                     const q = query(registrosRef, where("idFuncionario", "==", id));
                     const querySnapshot = await getDocs(q);
@@ -898,7 +883,6 @@
                         await deleteDoc(doc.ref);
                     });
                     
-                    // Atualiza a interface
                     await carregarDados();
                     mostrarSucesso('Funcionário removido com sucesso!');
                 } catch (e) {
@@ -911,7 +895,6 @@
         }
 
         async function registrarHorasExtras() {
-            // Limpa erros anteriores
             limparErros();
             
             const idFuncionario = document.getElementById('idFuncionarioInput').value.trim();
@@ -919,7 +902,6 @@
             const horas = parseFloat(document.getElementById('horasExtrasInput').value.replace(',', '.'));
             const observacoes = document.getElementById('observacoesInput').value.trim();
             
-            // Validações
             if (!/^\d{2}$/.test(idFuncionario)) {
                 mostrarErro('idFuncionarioInput', 'O ID deve conter exatamente 2 dígitos numéricos (ex: 01, 02)');
                 return;
@@ -948,7 +930,6 @@
             try {
                 toggleLoading('registrarHorasLoading', true);
                 
-                // Verifica se funcionário existe
                 const funcRef = doc(db, "funcionarios", idFuncionario);
                 const docSnap = await getDoc(funcRef);
                 
@@ -960,23 +941,21 @@
                 const funcionario = docSnap.data();
                 const dataFormatada = moment(data).format('DD/MM/YYYY');
                 
-                // Adiciona registro
                 await addDoc(collection(db, "registrosHoras"), {
                     idFuncionario,
                     data: dataFormatada,
                     horas,
                     nome: funcionario.nome,
                     observacoes,
-                    status: 'Pendente'
+                    status: 'Pendente',
+                    registradoPor: 'admin'
                 });
                 
-                // Limpa o formulário
                 document.getElementById('idFuncionarioInput').value = '';
                 document.getElementById('nomeFuncionarioInput').value = '';
                 document.getElementById('horasExtrasInput').value = '';
                 document.getElementById('observacoesInput').value = '';
                 
-                // Atualiza os dados
                 await carregarDados();
                 
                 mostrarSucesso(`Horas extras registradas para ${funcionario.nome}! Aguardando confirmação.`);
@@ -995,18 +974,7 @@
             try {
                 toggleLoading('confirmarHorasLoading', true);
                 
-                // Busca o responsável no banco de dados
-                const responsavelRef = doc(db, "funcionarios", registro.idFuncionario);
-                const responsavelSnap = await getDoc(responsavelRef);
-                
-                if (!responsavelSnap.exists() || responsavelSnap.data().cargo !== 'Responsável') {
-                    mostrarErro('senhaConfirmacaoInput', 'Apenas responsáveis podem confirmar horas');
-                    return;
-                }
-                
-                const senhaResponsavel = responsavelSnap.data().senhaConfirmacao || SENHA_RESPONSAVEL_PADRAO;
-                
-                if (senha !== senhaResponsavel) {
+                if (senha !== SENHA_RESPONSAVEL_PADRAO) {
                     mostrarErro('senhaConfirmacaoInput', 'Senha incorreta! Confirmação não autorizada.');
                     return;
                 }
@@ -1016,7 +984,8 @@
                 
                 await updateDoc(regRef, {
                     status: 'Confirmado',
-                    dataConfirmacao: moment().format('DD/MM/YYYY HH:mm')
+                    dataConfirmacao: moment().format('DD/MM/YYYY HH:mm'),
+                    confirmadoPor: 'admin'
                 });
                 
                 document.getElementById('modalConfirmacao').classList.add('hidden');
@@ -1044,7 +1013,6 @@
                 let registros = [];
 
                 if (idFuncionario || status) {
-                    // Caso tenham filtros de igualdade (id/status), pegamos só eles
                     const condicoes = [];
                     if (idFuncionario) condicoes.push(where("idFuncionario", "==", idFuncionario));
                     if (status) condicoes.push(where("status", "==", status));
@@ -1052,17 +1020,14 @@
                     const snap = await getDocs(query(collection(db, "registrosHoras"), ...condicoes));
                     registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                    // Filtra período no cliente
                     registros = registros.filter(r => {
                         const d = moment(r.data, "DD/MM/YYYY");
                         return (!dataInicial || d.isSameOrAfter(moment(dataInicial))) &&
                                (!dataFinal   || d.isSameOrBefore(moment(dataFinal)));
                     });
 
-                    // Ordena localmente por data desc
                     registros.sort((a, b) => moment(b.data, "DD/MM/YYYY").diff(moment(a.data, "DD/MM/YYYY")));
                 } else {
-                    // Sem igualdade, podemos usar intervalo + orderBy (um único campo = sem índice composto)
                     const condicoes = [];
                     if (dataInicial) condicoes.push(where("data", ">=", moment(dataInicial).format("DD/MM/YYYY")));
                     if (dataFinal)   condicoes.push(where("data", "<=", moment(dataFinal).format("DD/MM/YYYY")));
@@ -1087,13 +1052,11 @@
         function alternarAba(aba) {
             abaAtiva = aba;
             
-            // Esconder todas as abas primeiro
             document.getElementById('conteudoCadastro').classList.add('hidden');
             document.getElementById('conteudoHoras').classList.add('hidden');
             document.getElementById('conteudoHistorico').classList.add('hidden');
             document.getElementById('addButtonContainer').classList.add('hidden');
             
-            // Resetar estilos das abas
             document.getElementById('abaCadastro').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
             document.getElementById('abaCadastro').classList.add('text-gray-500');
             document.getElementById('abaHoras').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
@@ -1101,19 +1064,44 @@
             document.getElementById('abaHistorico').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
             document.getElementById('abaHistorico').classList.add('text-gray-500');
             
-            // Mostrar a aba correta
             if (aba === 'cadastro') {
-                document.getElementById('conteudoCadastro').classList.remove('hidden');
-                document.getElementById('addButtonContainer').classList.remove('hidden');
-                document.getElementById('abaCadastro').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
-                document.getElementById('abaCadastro').classList.remove('text-gray-500');
-                document.getElementById('tituloPagina').textContent = 'Cadastro';
+                // Mostrar modal de senha para a aba de cadastro
+                document.getElementById('modalSenhaAcesso').classList.remove('hidden');
+                document.getElementById('senhaAcessoInput').value = '';
+                document.getElementById('senhaAcessoInput').focus();
             } else if (aba === 'horas') {
                 document.getElementById('conteudoHoras').classList.remove('hidden');
                 document.getElementById('abaHoras').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
                 document.getElementById('abaHoras').classList.remove('text-gray-500');
                 document.getElementById('tituloPagina').textContent = 'Registrar Horas';
             } else if (aba === 'historico') {
+                // Mostrar modal de senha para a aba de histórico
+                document.getElementById('modalSenhaAcesso').classList.remove('hidden');
+                document.getElementById('senhaAcessoInput').value = '';
+                document.getElementById('senhaAcessoInput').focus();
+            }
+            
+            window.scrollTo(0, 0);
+        }
+
+        function verificarSenhaAcesso() {
+            const senha = document.getElementById('senhaAcessoInput').value;
+            
+            if (senha !== SENHA_RESPONSAVEL_PADRAO) {
+                mostrarErro('senhaAcessoInput', 'Senha incorreta');
+                return;
+            }
+            
+            document.getElementById('modalSenhaAcesso').classList.add('hidden');
+            
+            if (abaAtiva === 'cadastro') {
+                document.getElementById('conteudoCadastro').classList.remove('hidden');
+                document.getElementById('addButtonContainer').classList.remove('hidden');
+                document.getElementById('abaCadastro').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                document.getElementById('abaCadastro').classList.remove('text-gray-500');
+                document.getElementById('tituloPagina').textContent = 'Cadastro';
+                atualizarListaFuncionarios();
+            } else if (abaAtiva === 'historico') {
                 document.getElementById('conteudoHistorico').classList.remove('hidden');
                 document.getElementById('abaHistorico').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
                 document.getElementById('abaHistorico').classList.remove('text-gray-500');
@@ -1121,9 +1109,6 @@
                 atualizarFiltroFuncionarios();
                 atualizarHistorico();
             }
-            
-            // Scroll para o topo
-            window.scrollTo(0, 0);
         }
 
         function mostrarFormulario() {
@@ -1134,7 +1119,6 @@
             limparFormulario();
             limparErros();
             
-            // Foca no primeiro campo
             setTimeout(() => {
                 document.getElementById('nomeInput').focus();
             }, 100);
@@ -1174,8 +1158,6 @@
                 errorElement.textContent = mensagem;
                 errorElement.classList.remove('hidden');
                 input.focus();
-            } else {
-                console.error(`Elemento não encontrado: ${campoId} ou ${campoId}Error`);
             }
         }
 
@@ -1214,7 +1196,6 @@
                 document.getElementById('idInput').value = funcionario.id;
                 document.getElementById('idInput').disabled = true;
                 
-                // Se for responsável, mostra o campo de senha
                 if (funcionario.cargo === 'Responsável') {
                     document.getElementById('senhaResponsavelContainer').classList.remove('hidden');
                     document.getElementById('senhaResponsavelInput').value = funcionario.senhaConfirmacao || '';
@@ -1224,9 +1205,6 @@
 
         function abrirModalConfirmacao(index) {
             registroParaConfirmar = index;
-            const registro = registrosHoras[index];
-
-            // Abre o modal para digitar a senha do responsável
             document.getElementById('modalConfirmacao').classList.remove('hidden');
             document.getElementById('senhaConfirmacaoInput').value = '';
             document.getElementById('senhaConfirmacaoInput').focus();
@@ -1257,8 +1235,7 @@
             const novasHoras = parseFloat(document.getElementById('novasHorasInput').value.replace(',', '.'));
             const novaObservacao = document.getElementById('novaObservacaoInput').value.trim();
             
-            // Validações
-            if (senha !== SENHA_EDICAO) {
+            if (senha !== SENHA_RESPONSAVEL_PADRAO) {
                 mostrarErro('senhaEdicaoInput', 'Senha incorreta!');
                 return;
             }
@@ -1286,7 +1263,9 @@
                 
                 await updateDoc(regRef, {
                     horas: novasHoras,
-                    observacoes: novaObservacao
+                    observacoes: novaObservacao,
+                    editadoPor: 'admin',
+                    dataEdicao: moment().format('DD/MM/YYYY HH:mm')
                 });
                 
                 fecharModalEdicao();
@@ -1345,6 +1324,7 @@
             
             registros.forEach((registro, index) => {
                 const funcionario = funcionarios.find(f => f.id === registro.idFuncionario) || { nome: 'Funcionário não encontrado' };
+                const confirmadoPor = registro.confirmadoPor ? funcionarios.find(f => f.id === registro.confirmadoPor) : null;
                 
                 const registroElement = document.createElement('div');
                 registroElement.className = `bg-white p-3 rounded-lg border border-gray-200 ${registro.horas < 0 ? 'registro-desconto' : ''}`;
@@ -1357,10 +1337,10 @@
                             Confirmar
                         </button>
                     `;
-                } else {
+                } else if (registro.status === 'Confirmado') {
                     botoes = `
                         <span class="text-xs text-gray-500">
-                            Confirmado em ${registro.dataConfirmacao}
+                            Confirmado por ${confirmadoPor ? confirmadoPor.nome : 'N/A'} em ${registro.dataConfirmacao}
                         </span>
                     `;
                 }
@@ -1426,6 +1406,18 @@
             funcionarios.forEach(funcionario => {
                 const funcionarioElement = document.createElement('div');
                 funcionarioElement.className = 'bg-white p-3 rounded-lg border border-gray-200';
+                
+                let botoes = `
+                    <div class="flex gap-2 ml-2">
+                        <button onclick="editarFuncionario('${funcionario.id}')" class="text-blue-600 text-sm active:text-blue-700">
+                            Editar
+                        </button>
+                        <button onclick="removerFuncionario('${funcionario.id}')" class="text-red-600 text-sm active:text-red-700">
+                            Remover
+                        </button>
+                    </div>
+                `;
+                
                 funcionarioElement.innerHTML = `
                     <div class="flex justify-between items-start">
                         <div class="flex-1 min-w-0">
@@ -1433,14 +1425,7 @@
                             <p class="text-xs text-gray-500 truncate">${funcionario.cargo}</p>
                             <p class="text-xs text-gray-400 mt-1">ID: ${funcionario.id}</p>
                         </div>
-                        <div class="flex gap-2 ml-2">
-                            <button onclick="editarFuncionario('${funcionario.id}')" class="text-blue-600 text-sm active:text-blue-700">
-                                Editar
-                            </button>
-                            <button onclick="removerFuncionario('${funcionario.id}')" class="text-red-600 text-sm active:text-red-700">
-                                Remover
-                            </button>
-                        </div>
+                        ${botoes}
                     </div>
                 `;
                 lista.appendChild(funcionarioElement);
@@ -1456,15 +1441,12 @@
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
                 
-                // Título
                 doc.setFontSize(16);
                 doc.text('Relatório de Funcionários', 105, 15, { align: 'center' });
                 
-                // Data
                 doc.setFontSize(10);
                 doc.text(`Gerado em: ${moment().format('DD/MM/YYYY HH:mm')}`, 105, 22, { align: 'center' });
                 
-                // Cabeçalho da tabela
                 doc.setFontSize(12);
                 doc.setDrawColor(200);
                 doc.setFillColor(230, 230, 230);
@@ -1473,7 +1455,6 @@
                 doc.text('Nome', 50, 37);
                 doc.text('Cargo', 140, 37);
                 
-                // Conteúdo da tabela
                 let y = 45;
                 doc.setFontSize(10);
                 
@@ -1483,18 +1464,15 @@
                     doc.text(func.cargo, 140, y);
                     y += 7;
                     
-                    // Quebra de página se necessário
                     if (y > 280) {
                         doc.addPage();
                         y = 20;
                     }
                 });
                 
-                // Total
                 doc.setFontSize(12);
                 doc.text(`Total: ${funcionarios.length} funcionário${funcionarios.length !== 1 ? 's' : ''}`, 105, y+10, { align: 'center' });
                 
-                // Abre o PDF em uma nova aba
                 const pdfBlob = doc.output('blob');
                 const pdfUrl = URL.createObjectURL(pdfBlob);
                 window.open(pdfUrl, '_blank');
@@ -1510,13 +1488,11 @@
             try {
                 toggleLoading('exportExcelLoading', true);
                 
-                // Preparar dados
                 const dados = [
                     ['ID', 'Nome', 'Cargo'],
                     ...funcionarios.map(f => [f.id, f.nome, f.cargo])
                 ];
                 
-                // Criar planilha
                 const ws = XLSX.utils.aoa_to_sheet(dados);
                 ws['!cols'] = [
                     { wch: 10 },
@@ -1524,11 +1500,9 @@
                     { wch: 25 }
                 ];
                 
-                // Criar workbook
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Funcionários");
                 
-                // Gerar arquivo
                 XLSX.writeFile(wb, "funcionarios.xlsx");
             } catch (e) {
                 console.error('Erro ao exportar para Excel:', e);
@@ -1545,12 +1519,8 @@
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
                 
-                // Título
                 doc.setFontSize(16);
                 doc.text('Relatório de Horas Extras', 105, 15, { align: 'center' });
-                
-                // Filtros aplicados
-                doc.setFontSize(10);
                 
                 const dataInicial = document.getElementById('dataInicialFilter').value;
                 const dataFinal = document.getElementById('dataFinalFilter').value;
@@ -1570,10 +1540,8 @@
                     doc.text(filtros, 14, 25);
                 }
                 
-                // Data de geração
                 doc.text(`Gerado em: ${moment().format('DD/MM/YYYY HH:mm')}`, 105, 30, { align: 'center' });
                 
-                // Cabeçalho da tabela
                 doc.setFontSize(12);
                 doc.setDrawColor(200);
                 doc.setFillColor(230, 230, 230);
@@ -1583,7 +1551,6 @@
                 doc.text('Horas', 140, 47);
                 doc.text('Status', 170, 47);
                 
-                // Conteúdo da tabela
                 let y = 55;
                 doc.setFontSize(10);
                 
@@ -1596,14 +1563,12 @@
                     doc.text(reg.status, 170, y);
                     y += 7;
                     
-                    // Quebra de página se necessário
                     if (y > 280) {
                         doc.addPage();
                         y = 20;
                     }
                 });
                 
-                // Total de horas
                 const totalHoras = registrosHoras
                     .filter(r => r.status === 'Confirmado')
                     .reduce((sum, r) => sum + r.horas, 0);
@@ -1611,7 +1576,6 @@
                 doc.setFontSize(12);
                 doc.text(`Total de horas confirmadas: ${totalHoras.toFixed(1).replace('.', ',')}h`, 105, y+10, { align: 'center' });
                 
-                // Abre o PDF em uma nova aba
                 const pdfBlob = doc.output('blob');
                 const pdfUrl = URL.createObjectURL(pdfBlob);
                 window.open(pdfUrl, '_blank');
@@ -1627,38 +1591,39 @@
             try {
                 toggleLoading('exportExcelHistoricoLoading', true);
                 
-                // Preparar dados
                 const dados = [
-                    ['Data', 'ID Funcionário', 'Funcionário', 'Horas', 'Status', 'Observações'],
+                    ['Data', 'ID Funcionário', 'Funcionário', 'Horas', 'Status', 'Observações', 'Confirmado Por', 'Data Confirmação'],
                     ...registrosHoras.map(reg => {
                         const funcionario = funcionarios.find(f => f.id === reg.idFuncionario) || { nome: 'Desconhecido' };
+                        const confirmadoPor = reg.confirmadoPor ? funcionarios.find(f => f.id === reg.confirmadoPor) : null;
                         return [
                             reg.data,
                             reg.idFuncionario,
                             funcionario.nome,
                             reg.horas,
                             reg.status,
-                            reg.observacoes
+                            reg.observacoes,
+                            confirmadoPor ? confirmadoPor.nome : '',
+                            reg.dataConfirmacao || ''
                         ];
                     })
                 ];
                 
-                // Criar planilha
                 const ws = XLSX.utils.aoa_to_sheet(dados);
                 ws['!cols'] = [
-                    { wch: 12 }, // Data
-                    { wch: 10 }, // ID
-                    { wch: 30 }, // Nome
-                    { wch: 8 },  // Horas
-                    { wch: 12 }, // Status
-                    { wch: 50 }  // Observações
+                    { wch: 12 },
+                    { wch: 10 },
+                    { wch: 30 },
+                    { wch: 8 },
+                    { wch: 12 },
+                    { wch: 50 },
+                    { wch: 20 },
+                    { wch: 20 }
                 ];
                 
-                // Criar workbook
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Histórico de Horas");
                 
-                // Gerar arquivo
                 XLSX.writeFile(wb, "historico_horas.xlsx");
             } catch (e) {
                 console.error('Erro ao exportar histórico para Excel:', e);
@@ -1676,7 +1641,6 @@
             document.getElementById('dataDescontoInput').valueAsDate = new Date();
             limparErrosDesconto();
             
-            // Preenche o select de funcionários
             const select = document.getElementById('funcionarioDescontoSelect');
             select.innerHTML = '<option value="">Selecione o funcionário</option>';
             
@@ -1717,7 +1681,6 @@
             const observacoes = document.getElementById('observacoesDescontoInput').value.trim();
             const senha = document.getElementById('senhaDescontoInput').value;
             
-            // Validações
             if (!idFuncionario) {
                 mostrarErro('funcionarioDescontoSelect', 'Selecione um funcionário');
                 return;
@@ -1738,7 +1701,7 @@
                 return;
             }
             
-            if (senha !== SENHA_SUPERIOR) {
+            if (senha !== SENHA_RESPONSAVEL_PADRAO) {
                 mostrarErro('senhaDescontoInput', 'Senha incorreta!');
                 return;
             }
@@ -1749,15 +1712,15 @@
                 const funcionario = funcionarios.find(f => f.id === idFuncionario);
                 const dataFormatada = moment(data).format('DD/MM/YYYY');
                 
-                // Registra como horas negativas
                 await addDoc(collection(db, "registrosHoras"), {
                     idFuncionario,
                     data: dataFormatada,
-                    horas: -Math.abs(horas), // Garante que será negativo
+                    horas: -Math.abs(horas),
                     nome: funcionario.nome,
                     observacoes: `DESCONTO: ${observacoes}`,
                     status: 'Confirmado',
-                    dataConfirmacao: moment().format('DD/MM/YYYY HH:mm')
+                    dataConfirmacao: moment().format('DD/MM/YYYY HH:mm'),
+                    confirmadoPor: 'admin'
                 });
                 
                 fecharModalDesconto();
@@ -1770,42 +1733,6 @@
             } finally {
                 toggleLoading('confirmarDescontoLoading', false);
             }
-        }
-
-        function verificarSenhaAcesso(aba) {
-            // Se for a aba de horas, não precisa de senha
-            if (aba === 'horas') {
-                alternarAba(aba);
-                return;
-            }
-            
-            // Se já estiver na aba solicitada, não faz nada
-            if (abaAtiva === aba) return;
-            
-            // Para cadastro e histórico, verifica senha
-            abaSolicitada = aba;
-            document.getElementById('modalSenhaAcesso').classList.remove('hidden');
-            document.getElementById('senhaAcessoInput').value = '';
-            document.getElementById('senhaAcessoInput').focus();
-        }
-
-        function cancelarAcesso() {
-            document.getElementById('modalSenhaAcesso').classList.add('hidden');
-            abaSolicitada = null;
-            limparErros();
-        }
-
-        function confirmarAcesso() {
-            const senha = document.getElementById('senhaAcessoInput').value;
-            
-            if (senha !== SENHA_ACESSO) {
-                mostrarErro('senhaAcessoInput', 'Senha incorreta!');
-                return;
-            }
-            
-            document.getElementById('modalSenhaAcesso').classList.add('hidden');
-            alternarAba(abaSolicitada);
-            abaSolicitada = null;
         }
 
         function focarProximoCampo(currentField, nextFieldId) {
@@ -1833,7 +1760,6 @@
             document.getElementById('salvarBtn').addEventListener('click', salvarFuncionario);
             document.getElementById('registrarHorasBtn').addEventListener('click', registrarHorasExtras);
             
-            // Mostrar/ocultar campo de senha para responsáveis
             document.getElementById('cargoInput').addEventListener('change', function() {
                 const senhaContainer = document.getElementById('senhaResponsavelContainer');
                 if (this.value === 'Responsável') {
@@ -1845,15 +1771,13 @@
                 }
             });
             
-            // Exportação
             document.getElementById('exportPdfBtn').addEventListener('click', exportarParaPDF);
             document.getElementById('exportExcelBtn').addEventListener('click', exportarParaExcel);
             document.getElementById('exportPdfHistoricoBtn').addEventListener('click', exportarHistoricoParaPDF);
             document.getElementById('exportExcelHistoricoBtn').addEventListener('click', exportarHistoricoParaExcel);
             
-            // Navegação entre abas
             document.getElementById('abaCadastro').addEventListener('click', () => {
-                if (abaAtiva !== 'cadastro') verificarSenhaAcesso('cadastro');
+                if (abaAtiva !== 'cadastro') alternarAba('cadastro');
             });
 
             document.getElementById('abaHoras').addEventListener('click', () => {
@@ -1861,30 +1785,25 @@
             });
 
             document.getElementById('abaHistorico').addEventListener('click', () => {
-                if (abaAtiva !== 'historico') verificarSenhaAcesso('historico');
+                if (abaAtiva !== 'historico') alternarAba('historico');
             });
             
-            // Modal de edição
             document.getElementById('cancelarEdicaoBtn').addEventListener('click', fecharModalEdicao);
             document.getElementById('confirmarEdicaoBtn').addEventListener('click', confirmarEdicaoHoras);
-            
-            // Modal de confirmação
             document.getElementById('cancelarConfirmacaoBtn').addEventListener('click', cancelarConfirmacao);
             document.getElementById('confirmarHorasBtn').addEventListener('click', confirmarHoras);
-            
-            // Modal de desconto
             document.getElementById('descontarHorasBtn').addEventListener('click', abrirModalDesconto);
             document.getElementById('cancelarDescontoBtn').addEventListener('click', fecharModalDesconto);
             document.getElementById('confirmarDescontoBtn').addEventListener('click', confirmarDescontoHoras);
-            
-            // Modal de senha para acesso
-            document.getElementById('cancelarAcessoBtn').addEventListener('click', cancelarAcesso);
-            document.getElementById('confirmarAcessoBtn').addEventListener('click', confirmarAcesso);
-            
-            // Filtros do histórico
             document.getElementById('aplicarFiltroBtn').addEventListener('click', aplicarFiltroHistorico);
             
-            // Evento para mostrar nome do funcionário automaticamente
+            // Event listeners para o modal de senha de acesso
+            document.getElementById('confirmarAcessoBtn').addEventListener('click', verificarSenhaAcesso);
+            document.getElementById('cancelarAcessoBtn').addEventListener('click', () => {
+                document.getElementById('modalSenhaAcesso').classList.add('hidden');
+                alternarAba('horas'); // Volta para a aba de horas se cancelar
+            });
+            
             document.getElementById('idFuncionarioInput').addEventListener('input', function() {
                 const id = this.value.trim();
                 const nomeInput = document.getElementById('nomeFuncionarioInput');
@@ -1897,22 +1816,19 @@
                 }
             });
             
-            // Melhorias na entrada de dados
             document.getElementById('horasExtrasInput').addEventListener('input', function(e) {
                 this.value = this.value.replace(',', '.').replace(/[^0-9.]/g, '');
             });
             
-            // Navegação entre campos
             focarProximoCampo(document.getElementById('idFuncionarioInput'), 'dataInput');
             focarProximoCampo(document.getElementById('dataInput'), 'horasExtrasInput');
             focarProximoCampo(document.getElementById('horasExtrasInput'), 'observacoesInput');
             
-            // Previne zoom em inputs no iOS
             document.addEventListener('gesturestart', function(e) {
                 e.preventDefault();
             });
             
-            // Carrega dados do Firestore
+            // Carrega os dados iniciais
             await carregarDados();
         });
 
